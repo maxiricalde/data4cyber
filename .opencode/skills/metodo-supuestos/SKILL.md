@@ -24,6 +24,7 @@ Usar SIEMPRE antes de escribir código que aplique un modelo o método estadíst
 - Toda transformación (log, escala, winsor) se declara con su efecto sobre la interpretación.
 - Si un chequeo no se puede correr, se dice. No se inventa el resultado.
 - El agente escribe el código; **nunca ejecuta** el notebook ni los modelos. La ejecución la hace el usuario en la herramienta que elija (Colab, Jupyter, VS Code). Prohibido usar nbclient, papermill o un kernel propio para correr celdas.
+- No agregar supuestos, métodos ni secciones nuevas por iniciativa propia: solo se agrega lo que el usuario pida explícitamente y en el lugar que indique.
 
 ## Decision Gates
 
