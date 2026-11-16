@@ -17,3 +17,6 @@ Thumbs.db
 
 # Local backups
 .opencode.tar.xz
+
+# Skill registry (local, auto-generado)
+.atl/
