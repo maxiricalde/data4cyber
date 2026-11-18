@@ -8,7 +8,7 @@ mediciones de los ocho escenarios de Data4Cyber.
 | Notebook | Qué hace |
 | --- | --- |
 | `notebooks/01_eda.ipynb` | Estructura del dataset, nulos, fugas y control temporal |
-| `notebooks/02_supervisado.ipynb` | Random Forest, SVM y XGBoost con validación LOSO |
+| `notebooks/02_supervisado.ipynb` | Random Forest, SVM, XGBoost y CatBoost con validación LOSO sobre block_pca |
 | `notebooks/03_no_supervisado.ipynb` | Detección de anomalías entrenada solo con tráfico benigno |
 
 ## Cómo abrirlos en Google Colab
@@ -36,5 +36,6 @@ Adicionales/ documentación de dispositivos y métricas de Data4Cyber
 ## Entorno
 
 Colab ya trae `pandas`, `numpy`, `scikit-learn`, `scipy`, `matplotlib`, `joblib`
-y `xgboost`. `requirements.txt` documenta las versiones usadas para reproducir
-el entorno en una máquina local.
+y `xgboost`. **`catboost` no viene preinstalado**: la primera celda del notebook
+02 lo instala sola (`pip install catboost`). `requirements.txt` documenta las
+versiones usadas para reproducir el entorno en una máquina local.
