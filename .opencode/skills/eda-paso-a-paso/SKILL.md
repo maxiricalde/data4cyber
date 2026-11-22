@@ -4,7 +4,7 @@ description: "Trigger: EDA paso a paso, una celda a la vez, no escribas de más,
 license: Apache-2.0
 metadata:
   author: "maxi"
-  version: "1.0"
+  version: "1.1"
 ---
 
 # EDA paso a paso
@@ -16,7 +16,7 @@ Usar cuando el usuario avanza un EDA celda por celda: él compila, corrige y dec
 ## Hard Rules
 
 - Una sola celda por respuesta. Nunca dos, nunca "y de paso esta otra".
-- El alcance es el último pedido textual del usuario. Todo lo demás va a una lista de pendientes al final, jamás al código.
+- Alcance regido por `alcance-estricto`: el último pedido textual del usuario y nada más. Lo demás va a una lista de pendientes al final, jamás al código.
 - Se escribe la propuesta y se frena. El usuario compila y responde; no se asume el resultado.
 - No hay paso siguiente hasta que el usuario confirme el anterior: corrió / falló / qué mostró.
 - Prohibido adelantar: imports, limpieza, gráficos, modelado o conclusiones que nadie pidió.
