@@ -69,6 +69,26 @@ def buscar_random(X, y, grupos, clasificador, espacio, n_iter=30,
     return busqueda
 
 
+# ---------------------------------------------------------------------------
+# NUEVA: búsqueda exhaustiva (GridSearchCV) con block PCA fijo y LOSO.
+# Sirve para refinar una grilla local después de buscar_random.
+# ---------------------------------------------------------------------------
+def buscar_grid(X, y, grupos, clasificador, espacio, scoring="accuracy",
+                cv=None, n_jobs=-1, verbose=1):
+    """GridSearchCV con block PCA fijo y LOSO."""
+    busqueda = GridSearchCV(
+        pipeline_block(clasificador),
+        espacio,
+        cv=cv_loso() if cv is None else cv,
+        scoring=scoring,
+        n_jobs=n_jobs,
+        verbose=verbose,
+        return_train_score=True,
+    )
+    busqueda.fit(X, y, groups=grupos)
+    return busqueda
+
+
 def pipeline_block(clasificador, varianza=0.95, umbral=0.3):
     """Arma GroupedPCA con parámetros fijos y el clasificador."""
     return Pipeline([
@@ -215,15 +235,49 @@ def evaluar_pipeline(pipeline, X, y, grupos, nombre):
     return tabla, fila
 
 
+# ---------------------------------------------------------------------------
+# VERSIÓN ANTERIOR (solo RandomizedSearch). Se deja comentada por si hay que
+# volver atrás. La nueva agrega modo="grid" para GridSearchCV.
+#
+# def tunear_clasificador(X, y, grupos, clasificador, espacio, nombre,
+#                         n_iter=30, tolerancia=0.02, scoring="accuracy",
+#                         n_jobs=-1, verbose=1, random_state=SEED):
+#     """RandomizedSearch + selección por gap + evaluación LOSO."""
+#     busqueda = buscar_random(
+#         X, y, grupos, clasificador, espacio,
+#         n_iter=n_iter, scoring=scoring, n_jobs=n_jobs,
+#         verbose=verbose, random_state=random_state,
+#     )
+#     elegido = elegir_por_gap(busqueda, tolerancia)
+#     tabla, fila = evaluar_pipeline(elegido["pipeline"], X, y, grupos, nombre)
+#     return {
+#         "busqueda": busqueda,
+#         "elegido": elegido,
+#         "tabla": tabla,
+#         "fila": fila,
+#     }
+# ---------------------------------------------------------------------------
+# NUEVA VERSIÓN: modo="random" usa buscar_random; modo="grid" usa buscar_grid.
+# ---------------------------------------------------------------------------
 def tunear_clasificador(X, y, grupos, clasificador, espacio, nombre,
-                        n_iter=30, tolerancia=0.02, scoring="accuracy",
-                        n_jobs=-1, verbose=1, random_state=SEED):
-    """RandomizedSearch + selección por gap + evaluación LOSO."""
-    busqueda = buscar_random(
-        X, y, grupos, clasificador, espacio,
-        n_iter=n_iter, scoring=scoring, n_jobs=n_jobs,
-        verbose=verbose, random_state=random_state,
-    )
+                        modo="random", n_iter=30, tolerancia=0.02,
+                        scoring="accuracy", n_jobs=-1, verbose=1,
+                        random_state=SEED):
+    """RandomizedSearch o GridSearch + selección por gap + evaluación LOSO."""
+    if modo == "random":
+        busqueda = buscar_random(
+            X, y, grupos, clasificador, espacio,
+            n_iter=n_iter, scoring=scoring, n_jobs=n_jobs,
+            verbose=verbose, random_state=random_state,
+        )
+    elif modo == "grid":
+        busqueda = buscar_grid(
+            X, y, grupos, clasificador, espacio,
+            scoring=scoring, n_jobs=n_jobs, verbose=verbose,
+        )
+    else:
+        raise ValueError("modo debe ser 'random' o 'grid'")
+
     elegido = elegir_por_gap(busqueda, tolerancia)
     tabla, fila = evaluar_pipeline(elegido["pipeline"], X, y, grupos, nombre)
     return {
