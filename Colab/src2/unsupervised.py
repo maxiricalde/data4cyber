@@ -7,16 +7,14 @@ La pieza central es una sola: ``score = distancia al prototipo más cercano``.
 KMeans, Birch y DBSCAN cambian cómo construyen esos prototipos, no cómo se
 puntúa. Eso permite comparar los tres con la misma tabla de métricas.
 
-Protocolos:
+Protocolo:
 
 - ``loso``: ajusta con el benigno de siete escenarios, calibra el umbral sobre
   el último 20 % cronológico de ese benigno y evalúa en el escenario excluido.
-- ``online``: mismo ajuste, pero el umbral sale del primer 20 % del escenario
-  de test (warm-up supuesto limpio).
 
 Uso desde un notebook::
 
-    from src2.unsupervised import Detector, loso, online
+    from src2.unsupervised import Detector, loso
 
     tabla = loso(dfsX, dfsY, modelo="kmeans")
 """
@@ -140,7 +138,7 @@ class Detector:
         return distancia_al_prototipo(self.modelo_, Z, respaldo=self.Z_)
 
     def umbral(self, scores):
-        """Percentil ``q`` de unos scores dados (se usa en el protocolo online)."""
+        """Percentil ``q`` de unos scores dados; calibra el umbral."""
         return float(np.percentile(scores, self.q))
 
     def bundle(self):
@@ -206,29 +204,6 @@ def loso(dfsX, dfsY, modelo="kmeans", varianza=0.95):
         y_test = np.asarray(dfsY[test])
         fila = {"escenario": test, "modelo": modelo}
         fila.update(metricas(y_test, detector.score(X_test), detector.umbral_))
-        filas.append(fila)
-    return pd.DataFrame(filas)
-
-
-def online(dfsX, dfsY, modelo="kmeans", warmup=0.2, varianza=0.95):
-    """Mismo ajuste que LOSO, pero el umbral sale del warm-up del escenario de test."""
-    filas = []
-    for test in dfsX:
-        X_fit, X_val = entrenar_fold(dfsX, dfsY, test)
-        detector = Detector(modelo, varianza=varianza).fit(X_fit, X_val)
-
-        X_test = dfsX[test].reset_index(drop=True)
-        y_test = np.asarray(dfsY[test])
-        corte = max(int(len(X_test) * warmup), 1)
-        X_warm, y_warm = X_test.iloc[:corte], y_test[:corte]
-
-        if y_warm.sum():
-            print(f"aviso: {test} warm-up contiene {int(y_warm.sum())} filas de ataque")
-
-        detector.umbral_ = detector.umbral(detector.score(X_warm))
-        fila = {"escenario": test, "modelo": modelo}
-        fila.update(metricas(y_test[corte:], detector.score(X_test.iloc[corte:]),
-                             detector.umbral_))
         filas.append(fila)
     return pd.DataFrame(filas)
 

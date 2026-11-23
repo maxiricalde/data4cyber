@@ -5,21 +5,22 @@ import pandas as pd
 from IPython.display import display
 
 
-def plot_ataques_benignos(dfs):
+def plot_ataques_benignos(df):
     """Table and stacked bars of benign and attack rows per scenario.
 
-    Each DataFrame in `dfs` must have the boolean `attack_active` column.
+    `df` must have the `escenario` column and the boolean `attack_active` column.
     """
-    resumen = pd.DataFrame(
-        {
-            "ataque": {k: int(df["attack_active"].sum()) for k, df in dfs.items()},
-            "benigno": {k: int((~df["attack_active"]).sum()) for k, df in dfs.items()},
-        }
+    resumen = (
+        df.groupby("escenario", sort=False)["attack_active"]
+        .agg(ataque="sum", benigno=lambda s: (~s).sum())
+        .astype(int)
     )
     resumen["filas"] = resumen.sum(axis=1)
-    display(resumen)
 
-    resumen[["benigno", "ataque"]].plot.bar(
+
+    barras = resumen[["benigno", "ataque"]].copy()
+    barras.loc["total"] = barras.sum()
+    barras.plot.bar(
         stacked=True, color=["tab:green", "tab:red"], figsize=(9, 3.5)
     )
     plt.title("Filas benignas y de ataque por escenario")
