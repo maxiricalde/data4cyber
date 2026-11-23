@@ -3,25 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
-from sklearn.model_selection import GridSearchCV, LeaveOneGroupOut, cross_validate
+from sklearn.model_selection import GridSearchCV, LeaveOneGroupOut, RandomizedSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.feature_selection import RFE
+
 from .group import GroupedPCA
 from .train import SEED, _metricas
-from sklearn.pipeline import Pipeline
 
 
-from sklearn.model_selection import RandomizedSearchCV
-SEED = 42
-
-PARAMS_RF = {
-    "n_estimators": 120,
-    "max_depth": 18,
-    "min_samples_leaf": 2,
-    "class_weight": "balanced",
-    "random_state": SEED,
-    "n_jobs": -1,
-}
 def buscar_grid_rfe(X, y, grupos, clasificador, n_features,
                     step=5, espacio_modelo=None,
                     scoring="accuracy", cv=None, n_jobs=-1, verbose=1):
@@ -50,6 +39,8 @@ def buscar_grid_rfe(X, y, grupos, clasificador, n_features,
     )
     busqueda.fit(X, y, groups=grupos)
     return busqueda
+
+
 def buscar_random(X, y, grupos, clasificador, espacio, n_iter=30,
                   scoring="accuracy", cv=None, n_jobs=-1, verbose=1,
                   random_state=SEED):
@@ -69,13 +60,13 @@ def buscar_random(X, y, grupos, clasificador, espacio, n_iter=30,
     return busqueda
 
 
-# ---------------------------------------------------------------------------
-# NUEVA: búsqueda exhaustiva (GridSearchCV) con block PCA fijo y LOSO.
-# Sirve para refinar una grilla local después de buscar_random.
-# ---------------------------------------------------------------------------
 def buscar_grid(X, y, grupos, clasificador, espacio, scoring="accuracy",
                 cv=None, n_jobs=-1, verbose=1):
-    """GridSearchCV con block PCA fijo y LOSO."""
+    """GridSearchCV con block PCA fijo y LOSO.
+
+    espacio usa el prefijo modelo__... porque los parámetros de GroupedPCA
+    quedan fijos. Ejemplo: {"modelo__n_estimators": [100, 200]}.
+    """
     busqueda = GridSearchCV(
         pipeline_block(clasificador),
         espacio,
@@ -102,49 +93,12 @@ def cv_loso():
     return LeaveOneGroupOut()
 
 
-def buscar_grid(X, y, grupos, clasificador, espacio, scoring="accuracy",
-                cv=None, n_jobs=-1, verbose=1):
-    """GridSearchCV con block PCA fijo y LOSO.
-
-    espacio usa el prefijo modelo__... porque los parámetros de GroupedPCA
-    quedan fijos. Ejemplo: {"modelo__n_estimators": [100, 200]}.
-    """
-    busqueda = GridSearchCV(
-        pipeline_block(clasificador),
-        espacio,
-        cv=cv_loso() if cv is None else cv,
-        scoring=scoring,
-        n_jobs=n_jobs,
-        verbose=verbose,
-        return_train_score=True,
-    )
-    busqueda.fit(X, y, groups=grupos)
-    return busqueda
-
-
 def tabla_resultados(busqueda):
     """Filas de cv_results_ ordenadas por rank, con las columnas útiles."""
     tabla = pd.DataFrame(busqueda.cv_results_)
     columnas = [c for c in tabla.columns if c.startswith("param_")]
     columnas += ["mean_test_score", "std_test_score", "rank_test_score"]
     return tabla[columnas].sort_values("rank_test_score")
-
-
-def mejor(busqueda):
-    """Mejor combinación, score medio y estimador ya reentrenado."""
-    return {
-        "params": busqueda.best_params_,
-        "score": busqueda.best_score_,
-        "estimador": busqueda.best_estimator_,
-    }
-
-
-def evaluar_loso(estimador, X, y, grupos, scoring="accuracy"):
-    """Scores por fold del estimador elegido, con el mismo LOSO."""
-    return cross_validate(
-        estimador, X, y, groups=grupos, cv=cv_loso(),
-        scoring=scoring, return_train_score=False,
-    )
 
 
 def rf_pipeline_logo(pipeline, X, y, grupos):
@@ -167,24 +121,6 @@ def rf_pipeline_logo(pipeline, X, y, grupos):
     tabla = pd.DataFrame(filas).set_index("fold").round(3)
     tabla.loc["mean"] = tabla.mean(numeric_only=True).round(3)
     return tabla
-
-
-
-
-
-
-
-def tabla_gap(busqueda):
-    """cv_results_ con train, test y gap, ordenado por menor gap."""
-    tabla = pd.DataFrame(busqueda.cv_results_)
-    tabla["gap"] = tabla["mean_train_score"] - tabla["mean_test_score"]
-
-    columnas = [
-        "mean_test_score", "mean_train_score", "gap",
-        "std_test_score", "rank_test_score",
-    ] + [c for c in tabla.columns if c.startswith("param_")]
-
-    return tabla[columnas].sort_values("gap")
 
 
 def elegir_por_gap(busqueda, tolerancia=0.02):
@@ -235,30 +171,6 @@ def evaluar_pipeline(pipeline, X, y, grupos, nombre):
     return tabla, fila
 
 
-# ---------------------------------------------------------------------------
-# VERSIÓN ANTERIOR (solo RandomizedSearch). Se deja comentada por si hay que
-# volver atrás. La nueva agrega modo="grid" para GridSearchCV.
-#
-# def tunear_clasificador(X, y, grupos, clasificador, espacio, nombre,
-#                         n_iter=30, tolerancia=0.02, scoring="accuracy",
-#                         n_jobs=-1, verbose=1, random_state=SEED):
-#     """RandomizedSearch + selección por gap + evaluación LOSO."""
-#     busqueda = buscar_random(
-#         X, y, grupos, clasificador, espacio,
-#         n_iter=n_iter, scoring=scoring, n_jobs=n_jobs,
-#         verbose=verbose, random_state=random_state,
-#     )
-#     elegido = elegir_por_gap(busqueda, tolerancia)
-#     tabla, fila = evaluar_pipeline(elegido["pipeline"], X, y, grupos, nombre)
-#     return {
-#         "busqueda": busqueda,
-#         "elegido": elegido,
-#         "tabla": tabla,
-#         "fila": fila,
-#     }
-# ---------------------------------------------------------------------------
-# NUEVA VERSIÓN: modo="random" usa buscar_random; modo="grid" usa buscar_grid.
-# ---------------------------------------------------------------------------
 def tunear_clasificador(X, y, grupos, clasificador, espacio, nombre,
                         modo="random", n_iter=30, tolerancia=0.02,
                         scoring="accuracy", n_jobs=-1, verbose=1,

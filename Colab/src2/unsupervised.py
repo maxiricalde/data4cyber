@@ -141,24 +141,6 @@ class Detector:
         """Percentil ``q`` de unos scores dados; calibra el umbral."""
         return float(np.percentile(scores, self.q))
 
-    def bundle(self):
-        """Diccionario con lo necesario para puntuar datos nuevos."""
-        return {
-            "pipeline": self.pipeline_,
-            "modelo": self.modelo_,
-            "umbral": self.umbral_,
-            "q": self.q,
-            "modelo_nombre": self.modelo,
-            "varianza": self.varianza,
-            "respaldo": self.Z_,
-        }
-
-
-def predecir(bundle, X):
-    """Score de anomalía para filas nuevas con un bundle entrenado."""
-    Z = bundle["pipeline"].transform(X)
-    return distancia_al_prototipo(bundle["modelo"], Z, respaldo=bundle.get("respaldo"))
-
 
 def _mascara_validacion(grupo, y, fraccion=0.2):
     """Último tramo cronológico del benigno de cada escenario de entrenamiento."""
