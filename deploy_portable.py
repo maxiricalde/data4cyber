@@ -23,6 +23,7 @@ import pandas as pd
 from sklearn.metrics import pairwise_distances_argmin_min
 
 VENTANA = 120
+UMBRAL_XGB = 0.5
 
 
 def eliminar_columnas(df):
@@ -83,6 +84,8 @@ def predecir(csv_path, pkl_path="modelo_deploy.pkl"):
     proba = paquete["xgb_model"].predict_proba(
         transformar_bloques(X_rango, paquete["pca_blocks"])
     )[:, 1]
+    umbral_xgb = float(paquete.get("xgb_umbral", UMBRAL_XGB))
+    ataque_xgb = (proba >= umbral_xgb).astype(int)
 
     Z = paquete["birch_pipe"].transform(X_rango)
     _, score = pairwise_distances_argmin_min(
@@ -92,6 +95,7 @@ def predecir(csv_path, pkl_path="modelo_deploy.pkl"):
 
     return pd.DataFrame({
         "prob_ataque_xgb": proba,
+        "ataque_xgb": ataque_xgb,
         "score_birch": score,
         "flag_birch": (score > umbral).astype(int),
     })
@@ -110,7 +114,8 @@ def main():
         print(f"escrito {args.salida}: {len(pred)} filas")
     else:
         print(pred.describe().round(3).to_string())
-        print(f"flag_birch: {int(pred['flag_birch'].sum())}/{len(pred)}")
+    print(f"xgb:   {int(pred['ataque_xgb'].sum())} ataques / {len(pred)} filas")
+    print(f"birch: {int(pred['flag_birch'].sum())} marcadas / {len(pred)} filas")
 
 
 if __name__ == "__main__":
