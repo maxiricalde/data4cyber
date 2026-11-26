@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CPS Attack Monitor</title>
+<style>
+  :root {
+    --bg-dark: #1a1d23;
+    --bg-card: #22262e;
+    --bg-row: #2a2e38;
+    --border: #3a3f4a;
+    --text: #c8ccd4;
+    --text-dim: #8891a0;
+    --accent: #5b9bd5;
+    --danger: #e74c3c;
+    --danger-bg: rgba(231, 76, 60, 0.15);
+    --success: #2ecc71;
+    --success-bg: rgba(46, 204, 113, 0.10);
+    --warn: #f39c12;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ---- HEADER ---- */
+  .header {
+    background: #161920;
+    border-bottom: 1px solid var(--border);
+    padding: 0.6rem 1.2rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header h1 { font-size: 1.1rem; font-weight: 600; color: #fff; white-space: nowrap; }
+  .header h1 span { color: var(--danger); }
+  .model-tag {
+    font-size: 0.72rem;
+    background: rgba(91,155,213,0.15);
+    color: var(--accent);
+    padding: 0.2rem 0.6rem;
+    border-radius: 3px;
+    margin-left: auto;
+  }
+
+  /* ---- ALARM BANNER ---- */
+  .alarm-banner {
+    display: none;
+    background: linear-gradient(90deg, rgba(231,76,60,0.25), rgba(231,76,60,0.15));
+    border-bottom: 2px solid var(--danger);
+    color: #fff;
+    padding: 0.6rem 1.2rem;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+    animation: alarm-pulse 1.2s ease-in-out infinite;
+    z-index: 99;
+  }
+  .alarm-banner.visible { display: block; }
+  .alarm-banner .alarm-icon { font-size: 1.1rem; margin-right: 0.4rem; }
+  @keyframes alarm-pulse {
+    0%, 100% { opacity: 1; background-position: 0% 50%; }
+    50% { opacity: 0.7; }
+  }
+
+  /* ---- STATS BAR ---- */
+  .stats-bar {
+    display: flex;
+    gap: 1rem;
+    padding: 0.8rem 1.2rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .stat-box {
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    min-width: 110px;
+    text-align: center;
+  }
+  .stat-box .label {
+    font-size: 0.7rem; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .stat-box .value {
+    font-size: 1.3rem; font-weight: 700; margin-top: 0.15rem;
+  }
+  .stat-box .value.danger { color: var(--danger); }
+  .stat-box .value.success { color: var(--success); }
+  .stat-box .value.accent { color: var(--accent); }
+  .stat-box .value.warn { color: var(--warn); }
+
+  /* ---- CONTROLS ---- */
+  .controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+    align-items: center;
+  }
+  .btn {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.4rem 0.9rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: rgba(255,255,255,0.14); }
+  .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .speed-control { display: flex; align-items: center; gap: 0.3rem; }
+  .speed-control label { font-size: 0.75rem; color: var(--text-dim); }
+  .speed-control input[type=range] { width: 80px; accent-color: var(--accent); }
+  .speed-val { font-size: 0.75rem; color: var(--accent); min-width: 32px; }
+
+  /* ---- PROGRESS ---- */
+  .progress-wrap { height: 3px; background: var(--bg-card); }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+    width: 0%; transition: width 0.3s;
+  }
+
+  /* ---- CHART ---- */
+  .chart-section { padding: 0.8rem 1.2rem; display: flex; gap: 1rem; }
+  .chart-box {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.6rem;
+    min-height: 120px;
+  }
+  .chart-box .chart-title {
+    font-size: 0.72rem; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.4rem;
+  }
+  canvas { width: 100% !important; height: 100px !important; }
+
+  /* ---- STATUS ---- */
+  .status-line {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0 1.2rem 0.4rem; font-size: 0.75rem; color: var(--text-dim);
+  }
+  .pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success); animation: pulse-anim 1.5s infinite;
+  }
+  .pulse.off { background: var(--text-dim); animation: none; }
+  @keyframes pulse-anim { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ---- TABLE ---- */
+  .table-wrap { padding: 0 1.2rem 1.2rem; overflow-x: auto; }
+  .alert-count { padding: 0.6rem 0; font-size: 0.8rem; color: var(--text-dim); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  thead th {
+    background: #161920; color: var(--text-dim); font-weight: 600;
+    text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.5px;
+    padding: 0.6rem 0.8rem; text-align: left;
+    position: sticky; top: 42px; z-index: 10;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: rgba(255,255,255,0.04); }
+  tbody td { padding: 0.55rem 0.8rem; }
+
+  .sev-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 0.4rem;
+  }
+  .sev-attack { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+  .sev-normal { background: var(--success); }
+
+  .row-attack { background: var(--danger-bg) !important; }
+  .row-normal { background: var(--success-bg); }
+
+  .badge {
+    display: inline-block; padding: 0.15rem 0.5rem;
+    border-radius: 3px; font-size: 0.72rem;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .badge-attack { background: var(--danger); color: #fff; }
+  .badge-normal { background: rgba(46,204,113,0.2); color: var(--success); }
+
+  .prob-bar-wrap {
+    width: 80px; height: 6px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 3px; overflow: hidden;
+    display: inline-block; vertical-align: middle; margin-right: 0.4rem;
+  }
+  .prob-bar-fill {
+    height: 100%; border-radius: 3px; transition: width 0.3s;
+  }
+
+  .gt-match { color: var(--success); }
+  .gt-mismatch { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <h1><span>⚡</span> CPS Attack Monitor</h1>
+  <span class="model-tag" id="model-tag">loading…</span>
+</div>
+
+<!-- ALARM BANNER -->
+<div class="alarm-banner" id="alarm-banner">
+  <span class="alarm-icon">🚨</span>
+  ALARM: <span id="alarm-count">0</span> consecutive attacks detected
+</div>
+
+<!-- STATS BAR -->
+<div class="stats-bar">
+  <div class="stat-box">
+    <div class="label">Processed</div>
+    <div class="value accent" id="stat-processed">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">Attacks</div>
+    <div class="value danger" id="stat-attacks">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">Normal</div>
+    <div class="value success" id="stat-normal">0</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">Attack Rate</div>
+    <div class="value" id="stat-rate">0%</div>
+  </div>
+  <div class="stat-box">
+    <div class="label">Consec. Attacks</div>
+    <div class="value warn" id="stat-consec">0</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="btn-pause" onclick="togglePause()">⏸ Pause</button>
+    <button class="btn" onclick="resetStream()">↺ Reset</button>
+    <div class="speed-control">
+      <label>Speed:</label>
+      <input type="range" id="speed-slider" min="1" max="50" value="5"
+             oninput="changeSpeed(this.value)">
+      <span class="speed-val" id="speed-val">5x</span>
+    </div>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div class="progress-wrap">
+  <div class="progress-bar" id="progress-bar"></div>
+</div>
+
+<!-- CHARTS -->
+<div class="chart-section">
+  <div class="chart-box">
+    <div class="chart-title">Score Timeline</div>
+    <canvas id="chart-prob"></canvas>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">Attack Distribution</div>
+    <canvas id="chart-pie"></canvas>
+  </div>
+</div>
+
+<!-- STATUS -->
+<div class="status-line">
+  <div class="pulse" id="pulse-dot"></div>
+  <span id="status-text">Connecting…</span>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+  <div class="alert-count" id="alert-count">Alerts 0</div>
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>#</th>
+        <th>Timestamp ▼</th>
+        <th>Score</th>
+        <th>Prediction</th>
+        <th>Ground Truth</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+// ---- STATE ----
+let totalRows = 0;
+let attacks = 0;
+let normals = 0;
+let scoreSum = 0;
+let processed = 0;
+let evtSource = null;
+let paused = false;
+let consecutiveAttacks = 0;
+let maxConsecutive = 0;
+const ALARM_THRESHOLD = 5;
+
+// ---- CHART ----
+const scoreHistory = [];
+const MAX_CHART_POINTS = 300;
+
+function drawScoreChart() {
+  const canvas = document.getElementById('chart-prob');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 100 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = 100;
+  ctx.clearRect(0, 0, W, H);
+  if (scoreHistory.length < 2) return;
+
+  const pts = scoreHistory.slice(-MAX_CHART_POINTS);
+  const maxVal = Math.max(1, ...pts);
+  const step = W / (MAX_CHART_POINTS - 1);
+
+  // threshold line at 0.5 (normalized)
+  ctx.strokeStyle = 'rgba(231,76,60,0.4)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,4]);
+  const thY = H - ((0.5 / maxVal) * H);
+  ctx.beginPath(); ctx.moveTo(0, thY); ctx.lineTo(W, thY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // score line
+  ctx.beginPath();
+  pts.forEach((p, i) => {
+    const x = i * step;
+    const y = H - ((p / maxVal) * H);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#5b9bd5';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(91,155,213,0.3)');
+  grad.addColorStop(1, 'rgba(91,155,213,0)');
+  ctx.lineTo((pts.length - 1) * step, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+function drawPieChart() {
+  const canvas = document.getElementById('chart-pie');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 100 * dpr;
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = 100;
+  ctx.clearRect(0, 0, W, H);
+  const total = attacks + normals;
+  if (total === 0) return;
+
+  const cx = W / 2, cy = H / 2, r = 38;
+  const attackAngle = (attacks / total) * Math.PI * 2;
+
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, r, -Math.PI/2, -Math.PI/2 + attackAngle);
+  ctx.closePath(); ctx.fillStyle = '#e74c3c'; ctx.fill();
+
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.arc(cx, cy, r, -Math.PI/2 + attackAngle, -Math.PI/2 + Math.PI*2);
+  ctx.closePath(); ctx.fillStyle = '#2ecc71'; ctx.fill();
+
+  ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI*2);
+  ctx.fillStyle = '#22262e'; ctx.fill();
+
+  ctx.fillStyle = '#fff'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`${((attacks/total)*100).toFixed(1)}%`, cx, cy + 4);
+}
+
+// ---- SSE ----
+function startStream() {
+  if (evtSource) evtSource.close();
+  evtSource = new EventSource('/stream');
+  document.getElementById('status-text').textContent = 'Receiving data…';
+  document.getElementById('pulse-dot').classList.remove('off');
+
+  evtSource.onmessage = (e) => {
+    const d = JSON.parse(e.data);
+    const isAttack = d.flag === 1;
+    processed++;
+    const score = d.score != null ? d.score : 0;
+    scoreSum += score;
+    if (isAttack) attacks++; else normals++;
+
+    // ---- CONSECUTIVE ALARM ----
+    if (isAttack) {
+      consecutiveAttacks++;
+      if (consecutiveAttacks > maxConsecutive) maxConsecutive = consecutiveAttacks;
+    } else {
+      consecutiveAttacks = 0;
+    }
+
+    const banner = document.getElementById('alarm-banner');
+    if (consecutiveAttacks >= ALARM_THRESHOLD) {
+      banner.classList.add('visible');
+      document.getElementById('alarm-count').textContent = consecutiveAttacks;
+    } else {
+      banner.classList.remove('visible');
+    }
+
+    scoreHistory.push(score);
+    if (scoreHistory.length > MAX_CHART_POINTS) scoreHistory.shift();
+
+    // stats
+    document.getElementById('stat-processed').textContent = processed;
+    document.getElementById('stat-attacks').textContent = attacks;
+    document.getElementById('stat-normal').textContent = normals;
+    const rate = ((attacks / processed) * 100).toFixed(1);
+    document.getElementById('stat-rate').textContent = rate + '%';
+    document.getElementById('stat-rate').style.color =
+      (attacks/processed) > 0.3 ? '#e74c3c' : '#c8ccd4';
+    document.getElementById('stat-consec').textContent = consecutiveAttacks;
+    document.getElementById('progress-bar').style.width =
+      ((processed / totalRows) * 100) + '%';
+
+    // ---- TABLE ROW (prepend — newest first) ----
+    const tbody = document.getElementById('tbody');
+
+    // Smart scroll: check if user is near the top BEFORE inserting
+    const scrollY = window.scrollY;
+    const isNearTop = scrollY < 150;
+
+    const tr = document.createElement('tr');
+    tr.className = isAttack ? 'row-attack' : 'row-normal';
+
+    const scorePct = Math.min(score, 1) * 100;
+    const scoreDisplay = d.score != null ? (d.score > 1 ? d.score.toFixed(2) : (d.score * 100).toFixed(1) + '%') : '—';
+    const probColor = isAttack ? '#e74c3c' : score >= 0.3 ? '#f39c12' : '#2ecc71';
+
+    let gtCell = '—';
+    if (d.ground_truth != null) {
+      const match = isAttack === d.ground_truth;
+      gtCell = `<span class="${match ? 'gt-match' : 'gt-mismatch'}">${d.ground_truth ? 'Attack' : 'Normal'} ${match ? '✓' : '✗'}</span>`;
+    }
+
+    tr.innerHTML = `
+      <td><span class="sev-dot ${isAttack ? 'sev-attack' : 'sev-normal'}"></span></td>
+      <td style="color:var(--text-dim)">${d.idx}</td>
+      <td>${d.timestamp}</td>
+      <td>
+        <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:${scorePct.toFixed(1)}%;background:${probColor}"></div></div>
+        ${scoreDisplay}
+      </td>
+      <td><span class="badge ${isAttack ? 'badge-attack' : 'badge-normal'}">${isAttack ? '⚠ Attack' : 'Normal'}</span></td>
+      <td>${gtCell}</td>
+    `;
+
+    tbody.insertBefore(tr, tbody.firstChild);
+
+    // Smart scroll: if user was NOT near top, compensate so their view stays put
+    if (!isNearTop) {
+      window.scrollBy(0, tr.offsetHeight);
+    }
+
+    // Keep max 500 rows in DOM
+    while (tbody.children.length > 500) tbody.removeChild(tbody.lastChild);
+
+    document.getElementById('alert-count').textContent =
+      `Alerts ${attacks} of ${processed}`;
+
+    // charts (throttle)
+    if (processed % 3 === 0) { drawScoreChart(); drawPieChart(); }
+  };
+
+  evtSource.addEventListener('done', () => {
+    document.getElementById('status-text').textContent = 'Replay complete';
+    document.getElementById('pulse-dot').classList.add('off');
+    drawScoreChart(); drawPieChart();
+  });
+
+  evtSource.onerror = () => {
+    document.getElementById('status-text').textContent = 'Connection lost — retrying…';
+  };
+}
+
+// ---- CONTROLS ----
+async function togglePause() {
+  const res = await fetch('/api/control', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'pause'})
+  });
+  const data = await res.json();
+  paused = data.paused;
+  const btn = document.getElementById('btn-pause');
+  btn.textContent = paused ? '▶ Resume' : '⏸ Pause';
+  btn.classList.toggle('active', paused);
+  document.getElementById('pulse-dot').classList.toggle('off', paused);
+  document.getElementById('status-text').textContent =
+    paused ? 'Paused' : 'Receiving data…';
+}
+
+async function resetStream() {
+  await fetch('/api/control', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'reset'})
+  });
+  attacks = 0; normals = 0; scoreSum = 0; processed = 0;
+  consecutiveAttacks = 0; maxConsecutive = 0;
+  scoreHistory.length = 0;
+  document.getElementById('tbody').innerHTML = '';
+  document.getElementById('stat-processed').textContent = '0';
+  document.getElementById('stat-attacks').textContent = '0';
+  document.getElementById('stat-normal').textContent = '0';
+  document.getElementById('stat-rate').textContent = '0%';
+  document.getElementById('stat-consec').textContent = '0';
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('alarm-banner').classList.remove('visible');
+  drawScoreChart(); drawPieChart();
+  startStream();
+}
+
+async function changeSpeed(val) {
+  document.getElementById('speed-val').textContent = val + 'x';
+  await fetch('/api/control', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'speed', value: parseFloat(val)})
+  });
+}
+
+// ---- INIT ----
+fetch('/api/info').then(r => r.json()).then(d => {
+  totalRows = d.total_rows;
+  document.getElementById('model-tag').textContent =
+    `${d.model.script} → ${d.model.pkl}`;
+  startStream();
+});
+</script>
+</body>
+</html>
