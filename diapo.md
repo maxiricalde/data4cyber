@@ -77,6 +77,7 @@ Repaso de la presentación anterior, en dos bloques. Rápido, sin re-explicar el
   - **S_error** por medidor: √(P²+Q²) − S — ley del triángulo de potencias (5).
   - **imbalance** por medidor: máximo desbalance entre fases (5).
   - **balance_p** y **balance_q**: subestación − suma de ramas (2).
+- **Slide siguiente (07)**: tabla de las 13 invariantes — ley, valor normal y qué implica salirse de lo normal.
 - **Lectura:** el ataque es una inconsistencia **instantánea**; estas magnitudes la exponen.
 
 ---
@@ -100,7 +101,7 @@ Repaso de la presentación anterior, en dos bloques. Rápido, sin re-explicar el
 
 - **Mensaje:** tres regímenes; dos son anomalías físicas concretas.
 - **Mostrar:**
-  - Heatmap de z del centroide + plano de balance coloreado por cluster.
+  - Heatmap de z del centroide + plano de balance por cluster + comparación clusters vs ataque/benigno.
   - **C0 · 12.389 (86 %)**: operación normal, z ≈ 0.
   - **C1 · 602 (4 %)**: S_error alto en Load A y Load B (z ≈ 3.9 y 3.4). Es exactamente **S4**.
   - **C2 · 1.363 (9.5 %)**: S_error alto en PV (z ≈ 2.5). Se reparte entre **S4 y S5**.
