@@ -1,9 +1,4 @@
-"""Interpretación y evaluación de clusters no supervisados.
 
-El perfil de un cluster se lee con el z-score de su centroide: cuánto se aparta
-la media del cluster de la media global, en unidades de desvío global. Un |z|
-alto marca la variable que define el grupo porque se aleja de la media.
-"""
 
 from __future__ import annotations
 
@@ -15,11 +10,7 @@ from sklearn.metrics import (adjusted_rand_score, calinski_harabasz_score,
 
 
 def zscore_columnas(valores):
-    """Estandariza cada columna: media 0 y desvío 1, ignorando NaN.
-
-    Equivale a ``scipy.stats.zscore(valores, axis=0, nan_policy="omit")``, con
-    una diferencia: una columna constante queda en 0 en vez de dividir por cero.
-    """
+    
     valores = np.asarray(valores, dtype=float)
     media = np.nanmean(valores, axis=0)
     desvio = np.nanstd(valores, axis=0)
@@ -40,12 +31,7 @@ def nombre_legible(variable):
 
 
 def perfil_clusters(valores, etiquetas, columnas, top=3, min_peso=0.01):
-    """Perfil z-score de cada cluster: las variables que más lo definen.
-
-    ``valores`` va en unidades originales (no escaladas) y ``etiquetas`` son
-    las del clustering. Se omiten el ruido de DBSCAN (-1) y los clusters con
-    menos de ``min_peso`` de las filas: un grupo residual no describe un régimen.
-    """
+    
     etiquetas = np.asarray(etiquetas)
     Z = zscore_columnas(valores)
 
@@ -77,13 +63,6 @@ def tabla_clusters_escenario(etiquetas, grupos, nombre_grupo="escenario"):
 
 def resumen_clustering(Z, etiquetas, y, grupos, nombre_y="y",
                        nombre_grupo="grupo", random_state=42):
-    """Métricas de un clustering: internas, externas y tamaño.
-
-    Internas: silueta, Calinski-Harabasz y Davies-Bouldin. Externas: ARI y NMI
-    contra ``y`` y ``grupos``. Las externas son un control: si son altas, el
-    clustering sigue esas etiquetas (ataque, escenario) en vez de describir
-    estructura.
-    """
     etiquetas = np.asarray(etiquetas)
     varios = len(np.unique(etiquetas)) > 1
     return {

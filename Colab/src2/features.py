@@ -1,4 +1,4 @@
-"""Transformaciones por escenario. Una fila es un segundo."""
+
 
 import pandas as pd
 

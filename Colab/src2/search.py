@@ -14,11 +14,7 @@ from .train import SEED, _metricas
 def buscar_grid_rfe(X, y, grupos, clasificador, n_features,
                     step=5, espacio_modelo=None,
                     scoring="accuracy", cv=None, n_jobs=-1, verbose=1):
-    """GridSearchCV sobre la cantidad de columnas de RFE, con LOSO.
-
-    n_features: lista de valores para rfe__n_features_to_select.
-    espacio_modelo: opcional, parámetros del clasificador con prefijo modelo__.
-    """
+    """GridSearchCV con RFE y LOSO."""
     espacio = {"rfe__n_features_to_select": n_features}
     if espacio_modelo:
         espacio.update(espacio_modelo)

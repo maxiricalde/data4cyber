@@ -174,6 +174,8 @@ tr:last-child td{border-bottom:0}
 }
 .laws.dense th,.laws.dense td{padding:5px 8px;font-size:.76rem;text-align:left;vertical-align:top}
 .laws.dense td.num{font:0.74rem var(--mono)}
+table.per-scenario th,table.per-scenario td{text-align:left;padding:6px 12px;font-size:.82rem}
+table.per-scenario td.num{text-align:right;font:0.8rem var(--mono)}
 </style>
 </head>
 <body>
@@ -191,12 +193,13 @@ tr:last-child td{border-bottom:0}
   <a href="#s9a" aria-label="Distribución de clusters"><span>10 · Distribución clusters</span></a>
   <a href="#s9" aria-label="Interpretación balance"><span>11 · Interpretación balance</span></a>
   <a href="#s10" aria-label="Detector mejorado"><span>12 · Detector mejorado</span></a>
-  <a href="#s11" aria-label="Cierre"><span>13 · Cierre</span></a>
+  <a href="#s12" aria-label="Análisis por escenario"><span>13 · Por escenario</span></a>
+  <a href="#s11" aria-label="Cierre"><span>14 · Cierre</span></a>
 </nav>
 
 <main class="deck">
 
-<section id="s1" class="slide title" data-n="01 / 13">
+<section id="s1" class="slide title" data-n="01 / 14">
   <div class="panel">
     <p class="kicker">Data4Cyber · Bloque no supervisado</p>
     <h1>Detectar sin etiquetas, interpretar con física</h1>
@@ -206,20 +209,20 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<section id="s2" class="slide" data-n="02 / 13">
+<section id="s2" class="slide" data-n="02 / 14">
   <p class="kicker">02 · Recordatorio · detector sobre rango</p>
   <h2>El baseline separa, pero no parejo</h2>
-  <p class="lead">Entrenado solo con benigno y evaluado en el escenario que nunca vio.</p>
+  <p class="lead">Entrenado solo con benigno y evaluado en el escenario que nunca vio. La métrica que importa acá es el recall: cuántos ataques caza.</p>
   <div class="baseline">
     <div>
-      <p class="kicker">AUC por escenario · Birch · rango 120 s</p>
-      <div class="strip big"><div class="sb"><span class="lab">S1</span><span class="track"><span class="fill" style="width:79.4%"></span></span><span class="val">0.794</span></div><div class="sb"><span class="lab">S1-alt</span><span class="track"><span class="fill hot" style="width:48.8%"></span></span><span class="val">0.488</span></div><div class="sb"><span class="lab">S2</span><span class="track"><span class="fill" style="width:91.9%"></span></span><span class="val">0.919</span></div><div class="sb"><span class="lab">S3</span><span class="track"><span class="fill" style="width:62.6%"></span></span><span class="val">0.626</span></div><div class="sb"><span class="lab">S4</span><span class="track"><span class="fill" style="width:91.8%"></span></span><span class="val">0.918</span></div><div class="sb"><span class="lab">S5</span><span class="track"><span class="fill" style="width:91.2%"></span></span><span class="val">0.912</span></div><div class="sb"><span class="lab">S6</span><span class="track"><span class="fill" style="width:79.2%"></span></span><span class="val">0.792</span></div></div>
-      <p class="small dim" style="margin-top:8px">S1-alt 0.488 y S3 0.626: los folds donde r@5 cae a 0.</p>
+      <p class="kicker">Recall por escenario · Birch · rango 120 s</p>
+      <div class="strip big"><div class="sb"><span class="lab">S1</span><span class="track"><span class="fill" style="width:28.0%"></span></span><span class="val">0.280</span></div><div class="sb"><span class="lab">S1-alt</span><span class="track"><span class="fill" style="width:28.2%"></span></span><span class="val">0.282</span></div><div class="sb"><span class="lab">S2</span><span class="track"><span class="fill" style="width:45.5%"></span></span><span class="val">0.455</span></div><div class="sb"><span class="lab">S3</span><span class="track"><span class="fill hot" style="width:0%"></span></span><span class="val">0.000</span></div><div class="sb"><span class="lab">S4</span><span class="track"><span class="fill" style="width:58.9%"></span></span><span class="val">0.589</span></div><div class="sb"><span class="lab">S5</span><span class="track"><span class="fill" style="width:50.3%"></span></span><span class="val">0.503</span></div><div class="sb"><span class="lab">S6</span><span class="track"><span class="fill hot" style="width:7.0%"></span></span><span class="val">0.070</span></div></div>
+      <p class="small dim" style="margin-top:8px">El AUC disfraza: S3 (0.626) y S6 (0.792) caen a recall 0.000 y 0.070.</p>
     </div>
     <aside class="callout">
       <p class="kicker">Resumen</p>
-      <p class="mono small">AUC <b>0.778</b> · r@5 <b>0.312</b></p>
       <p class="mono small">recall <b>0.311</b> · espec S0 <b>1.000</b></p>
+      <p class="mono small dim">AUC 0.778 · r@5 0.312 — contexto</p>
       <hr class="rule">
       <p class="kicker">Confusor temporal</p>
       <p class="mono small">R² posición <b>0.973–0.986</b></p>
@@ -228,7 +231,8 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<section id="s3" class="slide" data-n="03 / 13">
+
+<section id="s3" class="slide" data-n="03 / 14">
   <p class="kicker">03 · Recordatorio · clusterizar ataques</p>
   <h2>El clustering no recupera la familia</h2>
   <p class="lead">Intentamos clusterizar solo filas de ataque y tipificar familia y escenario.</p>
@@ -241,7 +245,7 @@ tr:last-child td{border-bottom:0}
   <p class="small dim">Ataque/benigno (k=2): ARI 0.160. Ninguna partición recupera lo que buscábamos.</p>
 </section>
 
-<section id="s4" class="slide" data-n="04 / 13">
+<section id="s4" class="slide" data-n="04 / 14">
   <p class="kicker">04 · Cambio de objetivo</p>
   <h2>De clasificar ataques a buscar conocimiento</h2>
   <p class="lead">El clustering no separa ataques. En vez de forzarlo, le pedimos otra cosa.</p>
@@ -253,7 +257,7 @@ tr:last-child td{border-bottom:0}
   <p class="small dim">Frase de transición: <em>“Si no tipifica ataques, ¿qué nos dice? Vamos a buscar estructura.”</em></p>
 </section>
 
-<section id="s5" class="slide" data-n="05 / 13">
+<section id="s5" class="slide" data-n="05 / 14">
   <p class="kicker">05 · Primer intento · 132 features</p>
   <h2>La silueta perfecta que no dice nada</h2>
   <div class="two">
@@ -269,7 +273,7 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<section id="s6" class="slide" data-n="06 / 13">
+<section id="s6" class="slide" data-n="06 / 14">
   <p class="kicker">06 · Leyes físicas → invariantes</p>
   <h2>De 132 crudas a 13 invariantes</h2>
   <p class="lead">Cada invariante sale de una ley física: si el dato cumple la ley, el residuo es cero; el ataque lo rompe.</p>
@@ -303,7 +307,7 @@ tr:last-child td{border-bottom:0}
   <p class="small dim">El ataque es una inconsistencia instantánea; estas magnitudes la exponen sin mirar etiquetas.</p>
 </section>
 
-<section id="s6b" class="slide" data-n="07 / 13">
+<section id="s6b" class="slide" data-n="07 / 14">
   <p class="kicker">07 · Resumen · las 13 invariantes</p>
   <h2>Ley, valor normal y qué rompe cada invariante</h2>
   <div class="tablewrap">
@@ -348,7 +352,7 @@ tr:last-child td{border-bottom:0}
   </div>
   <p class="small dim">Valor normal = percentil 95 de |residuo| en filas benignas; mediana donde se indica. Un ataque rompe la ley y empuja el residuo fuera de ese rango.</p>
 </section>
-<section id="s7" class="slide" data-n="08 / 13">
+<section id="s7" class="slide" data-n="08 / 14">
   <p class="kicker">08 · Clustering de invariantes</p>
   <h2>K=3, y solo KMeans describe regímenes</h2>
   <div class="two">
@@ -372,7 +376,7 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<section id="s8" class="slide" data-n="09 / 13">
+<section id="s8" class="slide" data-n="09 / 14">
   <p class="kicker">09 · Interpretación · el mapa</p>
   <h2>Tres regímenes, dos anómalos</h2>
   <div class="cluster-grid">
@@ -389,7 +393,7 @@ tr:last-child td{border-bottom:0}
   <p class="small dim">ARI ataque 0.029 · ARI escenario 0.036: el clustering describe física, no sigue etiquetas.</p>
 </section>
 
-<section id="s9a" class="slide" data-n="10 / 13">
+<section id="s9a" class="slide" data-n="10 / 14">
   <p class="kicker">10 · Interpretación · la distribución de los clusters</p>
   <h2>Los clusters ocupan tres zonas del plano</h2>
   <div class="two">
@@ -407,7 +411,7 @@ tr:last-child td{border-bottom:0}
     </div>
   </div>
 </section>
-<section id="s9" class="slide" data-n="11 / 13">
+<section id="s9" class="slide" data-n="11 / 14">
   <p class="kicker">11 · Interpretación · clusters vs ataques</p>
   <h2>La inconsistencia se localiza en una rama</h2>
   <div class="two">
@@ -425,7 +429,7 @@ tr:last-child td{border-bottom:0}
   </div>
 </section>
 
-<section id="s10" class="slide" data-n="12 / 13">
+<section id="s10" class="slide" data-n="12 / 14">
   <p class="kicker">12 · Detector mejorado</p>
   <h2>Las invariantes suben recall y mantienen especificidad</h2>
   <p class="lead">Mismo protocolo, solo cambia la representación. El salto está en recall: 0.311 → 0.557.</p>
@@ -452,8 +456,27 @@ tr:last-child td{border-bottom:0}
   <p class="small dim">El rango alcanza espec 1.000 pero marca poco (recall 0.311). La fusión solo suma r@5 (+0.006) y especificidad; no justifica 145 features.</p>
 </section>
 
-<section id="s11" class="slide" data-n="13 / 13">
-  <p class="kicker">13 · Cierre</p>
+<section id="s12" class="slide" data-n="13 / 14">
+  <p class="kicker">13 · Resultados · análisis por escenario</p>
+  <h2>Recall y especificidad, escenario por escenario</h2>
+  <p class="lead">Birch sobre invariantes, protocolo LOSO (entrena con los otros siete).</p>
+  <div class="tablewrap">
+    <table class="per-scenario">
+      <thead><tr><th>escenario</th><th>recall</th><th>especificidad</th><th>lectura física</th></tr></thead>
+      <tbody>
+        <tr><td>S0</td><td class="num">—</td><td class="num">0.954</td><td>Física intacta: residuos en su piso (≈ 0).</td></tr>
+        <tr><td>S1</td><td class="num">0.992</td><td class="num">0.200</td><td>Control del PV, no medición → P/Q/S siguen cerrando.</td></tr>
+        <tr><td>S1-alt</td><td class="num">0.579</td><td class="num">0.793</td><td>Ídem S1: control del PV, física coherente.</td></tr>
+        <tr><td>S2</td><td class="num">0.079</td><td class="num">0.923</td><td>Control del BSS, no medición → invariantes ciegas.</td></tr>
+        <tr><td>S3</td><td class="num">0.240</td><td class="num">0.936</td><td>Falsifica la lectura del BSS a la mitad → balance_p roto, pero leve.</td></tr>
+        <tr><td>S4</td><td class="num">0.990</td><td class="num">0.908</td><td>Falsifica cargas y PV → balance_p a los extremos, S_error disparado.</td></tr>
+        <tr><td>S5</td><td class="num">0.977</td><td class="num">0.939</td><td>S4 + BSS → balance roto en tres ramas.</td></tr>
+        <tr><td>S6</td><td class="num">0.039</td><td class="num">0.982</td><td>Solo toca el precio → ninguna ley rota; ciego.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section><section id="s11" class="slide" data-n="14 / 14">
+  <p class="kicker">14 · Cierre</p>
   <h2>Lo que queda abierto</h2>
   <div class="close">
     <div class="limits">
@@ -475,6 +498,7 @@ tr:last-child td{border-bottom:0}
     </div>
   </div>
 </section>
+
 
 </main>
 

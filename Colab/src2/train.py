@@ -1,4 +1,4 @@
-"""Modelos y evaluación del supervisado: LOSO y métricas."""
+
 
 import numpy as np
 import pandas as pd

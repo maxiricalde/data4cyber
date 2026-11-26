@@ -1,23 +1,4 @@
-"""Detección de anomalías entrenada solo con benigno.
 
-El detector nunca ve una fila de ataque. Aprende la forma del tráfico benigno
-y puntúa qué tan lejos queda una fila nueva de esa forma.
-
-La pieza central es una sola: ``score = distancia al prototipo más cercano``.
-KMeans, Birch y DBSCAN cambian cómo construyen esos prototipos, no cómo se
-puntúa. Eso permite comparar los tres con la misma tabla de métricas.
-
-Protocolo:
-
-- ``loso``: ajusta con el benigno de siete escenarios, calibra el umbral sobre
-  el último 20 % cronológico de ese benigno y evalúa en el escenario excluido.
-
-Uso desde un notebook::
-
-    from src2.unsupervised import Detector, loso
-
-    tabla = loso(dfsX, dfsY, modelo="kmeans")
-"""
 
 from __future__ import annotations
 
@@ -48,7 +29,6 @@ def escala_vecinos(Z, k=5, percentil=90):
 
 
 def elegir_k(Z, rango=range(2, 11), muestra=2000):
-    """k de KMeans por silueta; el codo se mira con ``inertia_`` en el notebook."""
     mejor_k, mejor_silueta = None, -1.0
     for k in rango:
         etiquetas = KMeans(n_clusters=k, n_init=10, random_state=SEED).fit_predict(Z)
@@ -61,7 +41,6 @@ def elegir_k(Z, rango=range(2, 11), muestra=2000):
 
 
 def crear_modelo(nombre, Z):
-    """Fábrica: el modelo de clustering ya calibrado para la escala de ``Z``."""
     if nombre == "kmeans":
         return KMeans(n_clusters=elegir_k(Z), n_init=10, random_state=SEED)
 
@@ -74,7 +53,6 @@ def crear_modelo(nombre, Z):
 
 
 def prototipos(modelo, respaldo=None):
-    """Puntos de referencia del modelo: centros, subclusters o núcleos."""
     for atributo in ("cluster_centers_", "subcluster_centers_", "components_"):
         if hasattr(modelo, atributo):
             puntos = getattr(modelo, atributo)
@@ -86,13 +64,11 @@ def prototipos(modelo, respaldo=None):
 
 
 def distancia_al_prototipo(modelo, Z, respaldo=None):
-    """Score de anomalía: distancia de cada fila al prototipo benigno más cercano."""
     _, distancias = pairwise_distances_argmin_min(Z, prototipos(modelo, respaldo))
     return distancias
 
 
 def metricas(y, score, umbral):
-    """AUC, recall@5, recall, especificidad y cantidad marcada para un umbral."""
     y = np.asarray(y, dtype=int)
     pred = (score > umbral).astype(int)
     tn, fp, fn, tp = confusion_matrix(y, pred, labels=[0, 1]).ravel()
@@ -110,8 +86,6 @@ def metricas(y, score, umbral):
 
 
 class Detector:
-    """Pipeline de preproceso + prototipos benignos + umbral calibrado."""
-
     def __init__(self, modelo="kmeans", varianza=0.95, q=95):
         self.modelo = modelo
         self.varianza = varianza
@@ -155,11 +129,6 @@ def _mascara_validacion(grupo, y, fraccion=0.2):
 
 
 def entrenar_fold(dfsX, dfsY, test):
-    """Arma el fit benigno de los otros escenarios con su tramo de validación.
-
-    El detector solo puede ver filas benignas: si el fit incluye ataques, el
-    prototipo deja de representar la operación normal.
-    """
     partes_X, partes_y, partes_grupo = [], [], []
     for nombre in dfsX:
         if nombre == test:
@@ -183,7 +152,6 @@ def entrenar_fold(dfsX, dfsY, test):
 
 
 def loso(dfsX, dfsY, modelo="kmeans", varianza=0.95):
-    """Un fold por escenario: entrena con los otros siete y evalúa en el excluido."""
     filas = []
     for test in dfsX:
         X_fit, X_val = entrenar_fold(dfsX, dfsY, test)

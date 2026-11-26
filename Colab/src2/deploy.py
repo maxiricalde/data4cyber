@@ -293,13 +293,7 @@ def predecir_no_supervisado(csv_path, carpeta: str = "modelos") -> pd.DataFrame:
 
 
 def _etiquetas_regimen(X: pd.DataFrame, etiquetas: np.ndarray) -> dict[int, str]:
-    """Traduce cada cluster de KMeans a una etiqueta física legible.
-
-    El eje del clustering son las invariantes de potencia aparente: un cluster
-    queda cerca de cero (operación consistente) y los otros dos son los signos
-    opuestos de la inconsistencia (cargas vs PV). Las etiquetas se derivan del
-    perfil medio de cada cluster, no del número que asigna KMeans.
-    """
+    """Traduce cada cluster de KMeans a una etiqueta física legible."""
     perfil = X.assign(_cluster=etiquetas).groupby("_cluster").mean()
     cargas = (perfil["Load-A-AC-Meter__serror"]
               + perfil["Load-B-AC-Meter__serror"]) / 2
@@ -319,12 +313,6 @@ def _etiquetas_regimen(X: pd.DataFrame, etiquetas: np.ndarray) -> dict[int, str]
 
 
 def entrenar_regimenes(salida: str = "modelos", k: int = 3) -> dict:
-    """Entrena el KMeans de regímenes sobre invariantes de todos los escenarios.
-
-    Reproduce el clustering que ganó en la etapa no supervisada:
-    ``SimpleImputer(median) + RobustScaler + PCA(0.95) + KMeans(k=3)``.
-    No es un detector: agrupa por régimen físico y devuelve una etiqueta.
-    """
     if k != 3:
         raise ValueError("el etiquetador de regímenes está definido para k=3")
 
@@ -382,10 +370,7 @@ def exportar_regimenes(salida: str = "deploy_regimenes.pkl",
 
 
 def predecir_regimenes(csv_path, carpeta: str = "modelos") -> pd.DataFrame:
-    """Etiqueta cada fila de un CSV crudo con su régimen de operación.
-
-    Devuelve una columna ``regimen`` (texto), no un score ni un flag.
-    """
+   
     carpeta = _raiz() / carpeta
     modelo = joblib.load(carpeta / "regimenes_kmeans.joblib")
 

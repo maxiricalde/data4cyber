@@ -1,4 +1,4 @@
-"""Plots for the EDA: label balance per scenario."""
+
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -6,10 +6,7 @@ from IPython.display import display
 
 
 def plot_ataques_benignos(df):
-    """Table and stacked bars of benign and attack rows per scenario.
-
-    `df` must have the `escenario` column and the boolean `attack_active` column.
-    """
+    
     resumen = (
         df.groupby("escenario", sort=False)["attack_active"]
         .agg(ataque="sum", benigno=lambda s: (~s).sum())

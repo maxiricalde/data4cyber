@@ -1,4 +1,4 @@
-"""Reductores de columnas que se ajustan dentro de cada fold."""
+
 
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
