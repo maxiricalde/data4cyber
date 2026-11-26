@@ -18,15 +18,26 @@ paguina/
 
 ## Requisitos e instalación
 
-Creá/activá el entorno virtual e instalá las dependencias necesarias (para la web + los scripts de deploy):
+Creá y activá el entorno virtual:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+```
+
+Luego instalá las dependencias eligiendo una de las dos opciones:
+
+**Opción A — Usando `requirements.txt`:**
+
+```bash
 pip install -r paguina/requirements.txt
 ```
 
-Paquetes incluidos en [requirements.txt](requirements.txt): `flask>=3.0`, `pandas`, `numpy`, `scikit-learn` y `xgboost`.
+**Opción B — Instalando los paquetes por nombre:**
+
+```bash
+pip install flask pandas numpy scikit-learn xgboost
+```
 
 > Si además querés usar el resto de scripts/notebooks de la raíz del proyecto, instalá el `requirements.txt` raíz (`pip install -r requirements.txt`).
 
