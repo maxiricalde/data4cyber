@@ -1,188 +1,149 @@
-# Defensa — Detección y clasificación de ciberataques en un sistema de gestión de energía distribuida
+# Defensa — Bloque no supervisado
 
 **Trabajo Integrador · Métodos Cuantitativos para la Toma de Decisiones 2026 · UNSa**
-Integrantes: Cruz Pablo Danilo · Ricalde Maximiliano Jeremías
+Cruz, Pablo Danilo · Ricalde, Maximiliano Jeremías
 
-> Estructura de defensa oral de **25 minutos · 19 slides · 6 bloques**.
-> Métricas supervisadas (recall, espec S0, accuracy train, accuracy test) tomadas de `SUPERVISADO.ipynb`. Sin AUC.
-
----
-
-## Cronograma (25:00)
-
-| Bloque | Tema | Ventana | Slides |
-|---|---|---|---|
-| 0 | Apertura | 0:00–0:40 | 1 |
-| 1 | Problema y motivación | 0:40–4:00 | 3 |
-| 2 | Los datos | 4:00–7:15 | 2 |
-| 3 | Metodología | 7:15–12:00 | 4 |
-| 4 | Resultados | 12:00–18:15 | 4 |
-| 5 | Discusión | 18:15–21:15 | 2 |
-| 6 | Cierre | 21:15–25:00 | 3 |
+> **9 secciones · ≈10:50 de contenido.** Narrativa: repaso → cambio de objetivo → invariantes → detector mejorado.
+> Todos los números salen de la corrida **post-fix** de `NOSUPERVISADO.ipynb`. No usar `AVANCE_NO_SUPERVISADO.md` ni `INFORME_NO_SUPERVISADO.md` (corridas viejas, 11 features).
 
 ---
 
-## Bloque 0 — Apertura (0:00–0:40)
+## Mapa de secciones
 
-### Slide 1 — Título
-- "Detección y clasificación de ciberataques en un sistema de gestión de energía distribuida mediante aprendizaje automático".
-- Integrantes: Cruz, Ricalde · Métodos Cuantitativos 2026 · UNSa.
-- Gancho hablado: *"¿Qué pasa cuando alguien le miente al sistema que controla la energía de una planta solar?"*
-
----
-
-## Bloque 1 — Problema y motivación (0:40–4:00)
-
-### Slide 2 — La amenaza
-- Generación distribuida = superficie de ataque: comandos falsos a inversores (Modbus), mediciones falsificadas, manipulación de precio.
-- Es un ataque a la **física** de la planta, no solo a los datos.
-
-### Slide 3 — Motivación y el hueco (gap)
-- Dataset reciente (Panasonic/Fraunhofer); antecedentes: artículo del dataset + GRIDGUARD-AI (RF, CNN temporal, autoencoder).
-- **Aporte propio**: nadie aplicó clustering (K-Means/DBSCAN/BIRCH), SVM ni XGBoost; **nadie hizo reducción de columnas / importancia de variables**; **nadie tuneó hiperparámetros** sobre este dataset.
-
-### Slide 4 — Objetivos
-- General: detectar y clasificar ciberataques desde la telemetría.
-- Específicos: (1) detectar ataque, (2) clasificar el tipo, (3) comparar aprendizaje supervisado vs no supervisado.
-
----
-
-## Bloque 2 — Los datos (4:00–7:15)
-
-### Slide 5 — Data4Cyber en una tabla
-- **14.354 filas** (1 fila/segundo), **8 escenarios**, **157 columnas → 132 features** tras limpiar.
-- Tabla S0–S6 con filas y % de ataque (la del PDF).
-- Mensaje: S0 es el único escenario 100% limpio.
-
-### Slide 6 — Calidad y trampas de los datos
-- Balance: **6.768 benignas / 7.586 ataques** (≈47/53), sin desbalance fuerte.
-- Nulos: **0,89% de celdas**, imputación por media.
-- Fugas eliminadas: `attack_phase`, `attack_phase_all`, `timestamp`, `MQTT-Price-Signal`, `Profile.*`.
-- Frase: *"los datos esconden el tiempo, y el tiempo predice el ataque"* (detalle en Slide 15).
-
----
-
-## Bloque 3 — Metodología (7:15–12:00)
-
-### Slide 7 — El protocolo correcto: LOSO
-- LOSO (dejar un escenario entero afuera) vs CV aleatoria (mezcla segundos del mismo escenario → fuga temporal).
-- Número ancla (Crudo): **accuracy train 0,998 vs accuracy test 0,497**.
-- Mensaje: modelo "perfecto" en train que no generaliza.
-
-### Slide 8 — Rango móvil + reducción + RFE
-- Rango móvil **120 s** (dinámica, no nivel instantáneo).
-- Escalera: crudo (132) → corr (50) → PCA (19) → **block_pca (37)** → RFE (80).
-- Tabla B (RF fijo sobre rango):
-
-| Reducción | Features | recall | espec S0 | acc train | acc test |
-|---|---|---|---|---|---|
-| ninguna | 132 | 0,626 | 0,561 | 0,999 | 0,719 |
-| corr | 50 | 0,604 | 0,507 | 0,999 | 0,701 |
-| pca | 19 | 0,641 | 0,417 | 0,999 | 0,690 |
-| **block_pca** | **37** | 0,629 | 0,461 | 0,999 | **0,705** |
-
-- RFE (80) queda por debajo (acc test ≈0,680) → se descarta.
-
-### Slide 9 — Tuneo de hiperparámetros en dos etapas
-- **Etapa 1 — Random Search**: exploración amplia (RF `n_iter=30`, CatBoost `20`) sobre LOSO.
-- **Etapa 2 — Grid Search**: refinamiento fino alrededor de la mejor configuración.
-- Selección sobre LOSO; validación final en **holdout S1-alt**.
-
-### Slide 10 — Modelos y evaluación
-- RF, XGBoost, CatBoost × reducciones de la Slide 8.
-- Train LOSO (7 escenarios) + holdout final **S1-alt** (nunca visto).
-- Métricas: **recall, espec S0, accuracy train, accuracy test**.
-
----
-
-## Bloque 4 — Resultados (12:00–18:15)
-
-### Slide 11 — Hallazgo 1: la dinámica gana
-- Tabla A (RF, LOSO):
-
-| Configuración | Features | recall | espec S0 | acc train | acc test |
-|---|---|---|---|---|---|
-| Crudo (niveles) | 132 | 0,225 | 0,349 | 0,998 | 0,497 |
-| **Rango móvil 120 s** | 132 | **0,537** | **0,561** | 0,999 | **0,719** |
-| Ventana deslizante 20 s | 2640 | 0,249 | 0,333 | 0,999 | 0,510 |
-
-- Mensaje: sube test (0,497 → 0,719) sin subir train → la ventana temporal reduce el sobreajuste.
-
-### Slide 12 — Hallazgo 2: reducir sin matar
-- block_pca **132 → 37**: acc test **0,719 → 0,705**, recall **0,626 → 0,629**, espec S0 **0,561 → 0,461**.
-- Honestidad: se pierde algo de especificidad, casi nada de accuracy/recall.
-
-### Slide 13 — Supervisado + tuneo
-- Tuneo LOSO (Tabla C):
-
-| Modelo (etapa) | recall | espec S0 | acc train | acc test |
+| # | Sección | Tiempo | Idea central | Fuente |
 |---|---|---|---|---|
-| RF (random) | 0,665 | 0,519 | 0,949 | **0,733** |
-| XGB (random) | 0,637 | 0,537 | 0,914 | 0,720 |
-| CatBoost (random) | 0,610 | 0,511 | 0,984 | 0,706 |
-| RF (grid) | 0,656 | 0,512 | 0,884 | 0,729 |
-| XGB (grid) | 0,608 | 0,556 | 0,862 | 0,710 |
-| CatBoost (grid) | 0,638 | 0,560 | 0,848 | 0,729 |
-
-- Holdout S1-alt (Tabla D):
-
-| Modelo | recall | espec S0 | acc train | acc test |
-|---|---|---|---|---|
-| RF (random) | 0,926 | 0,519 | 0,930 | 0,777 |
-| RF (grid) | 0,932 | 0,512 | 0,878 | 0,742 |
-| **XGB (grid)** | **0,977** | 0,556 | 0,851 | **0,804** |
-| CatBoost (grid) | 0,790 | 0,560 | 0,825 | 0,725 |
-
-- Mensaje: el tuneo baja el gap train/test y sube test; el "ganador" depende del criterio (acc test LOSO → RF random; recall/holdout → XGB grid).
-
-### Slide 14 — No supervisado: resultado honesto
-- K-Means, Birch, DBSCAN entrenados solo con benigno. LOSO (recall / espec S0): Birch **0,416 / 0,925**; DBSCAN **0,405 / 0,934**; K-Means **0,334 / 0,996**.
-- **ARI familia ≤ 0,292**, ataque/benigno **0,160** → el clustering **no tipifica ataques**; agrupa regímenes operativos.
+| 1 | Título | 0:30 | Detectar sin etiquetas, interpretar con física | — |
+| 2 | Recordatorio | 1:45 | Detector sobre rango + intentos fallidos de ataque y familia | celdas 13, 19, 22 |
+| 3 | Cambio de objetivo | 0:40 | Ya no buscamos clasificar ataques; buscamos conocimiento | — |
+| 4 | Primer intento: 132 features | 1:00 | Fallido: silueta 1.000 por artefacto | celdas 25–28 |
+| 5 | Leyes físicas → invariantes | 1:15 | Quitan el nivel absoluto y dejan la física | celda 33 |
+| 6 | Clustering de invariantes | 1:15 | K=3, solo KMeans interpretable | celdas 34, 36 |
+| 7 | Interpretación de clusters | 1:30 | Tres regímenes, dos anómalos | celdas 38, 39 |
+| 8 | Detector mejorado | 1:30 | Las invariantes ganan; la fusión no aporta | celda 45 |
+| 9 | Cierre | 0:45 | Limitaciones y puente al híbrido | — |
 
 ---
 
-## Bloque 5 — Discusión (18:15–21:15)
+## 1 · Título (0:30)
 
-### Slide 15 — El tiempo es el confusor principal
-- Las features **reconstruyen la posición temporal con R² 0,974–0,986**: el modelo puede acertar por ubicación, no por ataque.
-- Al residualizar el tiempo, el clustering pierde señal en **6 de 7 folds**.
-- Mensaje: sin control temporal, cualquier modelo funciona por la razón equivocada.
-
-### Slide 16 — Contraste con los papers
-- GRIDGUARD-AI vs vosotros: aportás LOSO honesto, reducción interpretable y el resultado negativo del clustering.
-- Lo que tu trabajo demuestra y otros no reportan: el tamaño real del efecto del tiempo.
+- **Mensaje:** "Detectar sin etiquetas, interpretar con física."
+- **Mostrar:** título e integrantes.
+- **No mostrar:** números ni figuras.
 
 ---
 
-## Bloque 6 — Cierre (21:15–25:00)
+## 2 · Recordatorio (1:45)
 
-### Slide 17 — Limitaciones
-- S0 es el único escenario limpio; ataques anclados en franja temporal.
-- El umbral **no transfiere** entre escenarios (recall se derrumba en S1-alt).
-- Imputación global antes del split (fuga menor de estadísticos); decilo antes de que lo encuentren.
+Repaso de la presentación anterior, en dos bloques. Rápido, sin re-explicar el protocolo.
 
-### Slide 18 — Conclusiones
-- (1) Es detectable con supervisado + dinámica (acc test ~0,73; recall ~0,67 en LOSO).
-- (2) Reducir a 37 features es viable (acc test 0,705).
-- (3) El clustering no clasifica ataques y el tiempo domina.
+### 2.1 · Detector sobre rango
 
-### Slide 19 — Trabajo futuro y cierre
-- **Más entrenamientos con la versión actualizada del dataset** (corrige la limitación de un solo escenario limpio).
-- Umbral adaptativo por escenario; SVM como línea pendiente.
-- Cierre con la frase del inicio + "Gracias, preguntas".
+- **Mensaje:** entrenado solo con benigno y evaluado en el escenario que nunca vio, separa en S2/S4/S5 pero se cae en S1-alt y S3.
+- **Mostrar:** barras de AUC por escenario (Birch, rango 120 s):
+  S1 0.794 · *S1-alt 0.488* · S2 0.919 · S3 0.626 · S4 0.918 · S5 0.912 · S6 0.792.
+- **Resumen global:** AUC 0.778 · r@5 0.312 · recall 0.311 · espec S0 1.000.
+- **Confusor temporal:** R² posición 0.973–0.986; r@5 = 0 en S1-alt y S3.
 
----
+### 2.2 · Intentos fallidos: clusterizar ataque y tipo de ataque
 
-## Preguntas probables (preparadas)
-
-1. **"¿Cuál es el mejor modelo?"** → Depende de la métrica: en LOSO, RF random lidera accuracy test (0,733) y recall (0,665); en holdout S1-alt, XGB grid lidera accuracy test (0,804) y recall (0,977).
-2. **"¿Sirvió el tuneo?"** → Sí: baja el sobreajuste (RF acc train 0,999 → 0,949) y sube accuracy test (0,719 → 0,733) y recall (0,537 → 0,665) en LOSO.
-3. **"¿Cómo evitan la fuga temporal?"** → LOSO + eliminación de `timestamp`/`profile` + rango por escenario. Prueba: acc train 0,998 vs acc test 0,497 en crudo.
+- **Mensaje:** el clustering no recupera ni la familia ni el escenario.
+- **Mostrar:** ARI familia: KMeans k=3 **0.292** · k=8 0.100 · Birch 0.012 · DBSCAN 0.008; ARI escenario ≤ 0.205; ataque/benigno (k=2) 0.160.
+- **No mostrar acá:** la dispersión de balance; pertenece a la interpretación (§7).
 
 ---
 
-## Fuente de métricas
-- Slides 7, 8, 11 y 13 → `SUPERVISADO.ipynb` (celdas 10, 13, 20–25, 28–32, 34).
-- Slide 14 → `NOSUPERVISADO.ipynb`.
-- Slide 15 (R²) → EDA / no supervisado.
-- **Sin AUC en ninguna slide.**
+## 3 · Cambio de objetivo (0:40)
+
+- **Mensaje:** *"Dejamos de pedirle al clustering que separe ataques; le pedimos estructura."*
+- **Mostrar:** el giro en una línea: de **clasificar ataque/familia** a **buscar conocimiento** en el dataset.
+- **Frase de transición:** *"Si no tipifica ataques, ¿qué nos dice? Vamos a buscar qué conocimiento hay."*
+
+---
+
+## 4 · Primer intento: 132 features (1:00)
+
+- **Mensaje:** sobre las 132 columnas crudas, el clustering no interpreta nada.
+- **Mostrar:** K=2, silueta **1.000**, Davies–Bouldin 0.014; un cluster de **231 filas (1.6 %)** domina la partición. KMeans ARI ataque 0.005 · escenario 0.000.
+- **Lectura:** la silueta perfecta es artefacto de un cluster diminuto; `peso_min` lo desenmascara. Los grupos no describen ningún régimen físico.
+- **Frase:** *"Una silueta alta no es interpretabilidad."*
+
+---
+
+## 5 · Leyes físicas → invariantes (1:15)
+
+- **Mensaje:** reducimos de 132 crudas a **13 invariantes** que quitan el nivel absoluto y dejan la física.
+- **Mostrar (las 13):**
+  - **ΔSOC**: |reportado − referencia| (1).
+  - **S_error** por medidor: √(P²+Q²) − S — ley del triángulo de potencias (5).
+  - **imbalance** por medidor: máximo desbalance entre fases (5).
+  - **balance_p** y **balance_q**: subestación − suma de ramas (2).
+- **Lectura:** el ataque es una inconsistencia **instantánea**; estas magnitudes la exponen.
+
+---
+
+## 6 · Clustering de invariantes (1:15)
+
+- **Mensaje:** con invariantes, K por codo y silueta = **3**, y solo KMeans describe regímenes.
+- **Mostrar:** la tabla de modelos sobre invariantes:
+
+| modelo | clusters | silueta | DB | ARI ataque | NMI escenario |
+|---|---|---|---|---|---|
+| **KMeans** | **3** | **0.971** | 0.117 | 0.029 | 0.204 |
+| Birch | 828 | 0.630 | 0.122 | 0.001 | 0.246 |
+| DBSCAN | 394 | 0.202 | 1.824 | 0.033 | 0.259 |
+
+- **Lectura:** Birch y DBSCAN fragmentan en cientos de clusters; CH se dispara (Birch 9.1e14), no mide calidad.
+
+---
+
+## 7 · Interpretación de clusters (1:30)
+
+- **Mensaje:** tres regímenes; dos son anomalías físicas concretas.
+- **Mostrar:**
+  - Heatmap de z del centroide + plano de balance coloreado por cluster.
+  - **C0 · 12.389 (86 %)**: operación normal, z ≈ 0.
+  - **C1 · 602 (4 %)**: S_error alto en Load A y Load B (z ≈ 3.9 y 3.4). Es exactamente **S4**.
+  - **C2 · 1.363 (9.5 %)**: S_error alto en PV (z ≈ 2.5). Se reparte entre **S4 y S5**.
+- **Control:** ARI ataque 0.029 · ARI escenario 0.036 → el clustering describe física, no sigue etiquetas.
+
+---
+
+## 8 · Detector mejorado (1:30)
+
+- **Mensaje:** el mismo hallazgo —las invariantes— sirve para detectar, no solo para interpretar.
+- **Mostrar:** tres columnas con AUC.
+
+| representación | features | AUC | r@5 | recall | espec S0 |
+|---|---|---|---|---|---|
+| rango móvil 120 s | 132 | 0.778 | 0.312 | 0.311 | 1.000 |
+| **invariantes** | **13** | **0.796** | 0.392 | 0.557 | 0.954 |
+| rango + invariantes | 145 | 0.790 | 0.398 | 0.326 | 0.993 |
+
+- **Lectura honesta:** el salto está en rango → invariantes; la fusión suma r@5 (+0.006, ruido) y especificidad, pero pierde AUC y recall. Invariantes solas es el titular.
+- **Caveat:** S1-alt sigue en r@5 ≈ 0; ese techo a bajo FPR justifica el híbrido.
+
+---
+
+## 9 · Cierre (0:45)
+
+- **Limitaciones:** S1-alt; el umbral no transfiere; un solo seed; S0 es el único limpio.
+- **Propuestas:** híbrido SAFE/DUDOSO con supervisado sobre los DUDOSO; umbral adaptativo; más escenarios limpios.
+- **Cierre:** *"Las invariantes sirven para interpretar y para detectar; el techo del no supervisado es lo que pide el híbrido."*
+
+---
+
+## Preguntas probables
+
+1. **"¿Por qué el baseline falla en S3 si el AUC es 0.626?"** → el score no ordena a bajo FPR; no es el umbral.
+2. **"¿Por qué el crudo dio silueta 1.000?"** → un cluster de 231 filas; `peso_min` lo desenmascara.
+3. **"¿Por qué NMI > 0 si no hay asociación?"** → NMI no está corregida por azar; el control limpio es ARI.
+4. **"¿Qué aporta la fusión?"** → r@5 +0.006 (ruido); no justifica 145 features.
+5. **"¿Por qué no usan las etiquetas?"** → usarlas sería supervisado; acá son solo control.
+
+---
+
+## Notas de producción
+
+- `presentacion.html` todavía tiene la versión de 7 secciones; **falta regenerarlo** para estas 9 secciones (pendiente).
+- El control de tiempo (celda 19) tiene salida vieja: re-ejecutar 13 → 19 antes de usarlo en el repaso.
+- Si cambia un número en el notebook, actualizarlo en las secciones 2, 4, 6, 7 y 8 de este archivo.

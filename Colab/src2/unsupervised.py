@@ -155,7 +155,11 @@ def _mascara_validacion(grupo, y, fraccion=0.2):
 
 
 def entrenar_fold(dfsX, dfsY, test):
-    """Arma el benigno de los otros escenarios con su tramo de validación."""
+    """Arma el fit benigno de los otros escenarios con su tramo de validación.
+
+    El detector solo puede ver filas benignas: si el fit incluye ataques, el
+    prototipo deja de representar la operación normal.
+    """
     partes_X, partes_y, partes_grupo = [], [], []
     for nombre in dfsX:
         if nombre == test:
@@ -167,11 +171,14 @@ def entrenar_fold(dfsX, dfsY, test):
     X_train = pd.concat(partes_X, ignore_index=True)
     y_train = np.concatenate(partes_y)
     grupo = np.concatenate(partes_grupo)
+    mascara_benigna = y_train == 0
     validacion = _mascara_validacion(grupo, y_train)
 
-    X_fit, X_val = X_train.loc[~validacion], X_train.loc[validacion]
+    X_fit = X_train.loc[mascara_benigna & ~validacion]
+    X_val = X_train.loc[validacion]
     if len(X_val) == 0:
-        X_fit, X_val = X_train, X_train
+        X_fit, X_val = X_train.loc[mascara_benigna], X_train.loc[mascara_benigna]
+    assert (y_train[mascara_benigna & ~validacion] == 0).all()
     return X_fit, X_val
 
 
