@@ -1,15 +1,21 @@
-"""Despliegue supervisado: entrena ``GroupedPCA + XGBoost`` y exporta el ``.pkl``.
+"""Despliegue supervisado y no supervisado.
 
-Entrena con los mejores hiperparámetros del grid local sobre todos los
-escenarios salvo ``S1-alt``, que queda reservado para probar el modelo.
+Supervisado: ``GroupedPCA + XGBoost``. No supervisado: ``Birch`` sobre
+invariantes físicos (ΔSOC, S_error, imbalance y balance nodal).
 
 Uso::
 
-    from src2.deploy import entrenar_xgboost, exportar_portable, predecir
+    from src2.deploy import (entrenar_xgboost, exportar_portable, predecir,
+                             entrenar_no_supervisado, exportar_no_supervisado,
+                             predecir_no_supervisado)
 
     entrenar_xgboost()
     exportar_portable()
     pred = predecir("datasets/datasetS1alt.csv")
+
+    entrenar_no_supervisado()
+    exportar_no_supervisado()
+    pred_ns = predecir_no_supervisado("datasets/datasetS1alt.csv")
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ import pickle
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.metrics import pairwise_distances_argmin_min
 from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 
@@ -28,6 +35,7 @@ from .data import eliminar_columnas, imputar_media
 from .features import rango_movil, rango_por_escenario
 from .group import GroupedPCA
 from .train import PARAMS_XGB, SEED
+from .unsupervised import Detector, entrenar_fold, prototipos
 
 BEST_XGB = {
     "learning_rate": 0.01,
@@ -47,6 +55,9 @@ ARCHIVOS = {
     "S5": "datasetS5.csv",
     "S6": "datasetS6.csv",
 }
+MEDIDORES = ["BSS-Inverter-AC-Meter", "Load-A-AC-Meter", "Load-B-AC-Meter",
+             "PV-Inverter-AC-Meter", "Substation-AC-Meter"]
+RAMAS = [m for m in MEDIDORES if m != "Substation-AC-Meter"]
 
 
 def _raiz() -> Path:
@@ -162,4 +173,113 @@ def predecir(csv_path, carpeta: str = "modelos",
     return pd.DataFrame({
         "prob_ataque_xgb": proba,
         "ataque_xgb": (proba >= umbral).astype(int),
+    })
+
+
+# --------------------------------------------------------- no supervisado ----
+
+
+def invariantes_fisicas(df: pd.DataFrame) -> pd.DataFrame:
+    """Invariantes intra-medidor (ΔSOC, S_error, imbalance) + balance nodal (P, Q)."""
+    inv = pd.DataFrame(index=df.index)
+    inv["dsoc"] = (df["Battery-SOC-Reported.soc_value"]
+                   - df["Battery-SOC-Reference.soc_value"]).abs()
+    for medidor in MEDIDORES:
+        p = df[f"{medidor}.p_sum3"]
+        q = df[f"{medidor}.q_sum3"]
+        s = df[f"{medidor}.s_sum3"]
+        inv[f"{medidor}__serror"] = np.sqrt(p**2 + q**2) - s
+        fases = [df[f"{medidor}.uln1"], df[f"{medidor}.uln2"], df[f"{medidor}.uln3"]]
+        pares = [(fases[i] - fases[j]).abs() for i in range(3) for j in range(i + 1, 3)]
+        inv[f"{medidor}__imbalance"] = pd.concat(pares, axis=1).max(axis=1)
+    inv["balance_p"] = (df["Substation-AC-Meter.p_sum3"]
+                        - sum(df[f"{m}.p_sum3"] for m in RAMAS))
+    inv["balance_q"] = (df["Substation-AC-Meter.q_sum3"]
+                        - sum(df[f"{m}.q_sum3"] for m in RAMAS))
+    return inv
+
+
+def _invariantes_por_escenario() -> tuple[dict, dict]:
+    df = eliminar_columnas(_cargar())
+    X_inv, Y = {}, {}
+    for escenario, bloque in df.groupby("escenario", sort=False):
+        X_inv[escenario] = invariantes_fisicas(
+            bloque.drop(columns=["escenario", "attack_active"])
+        ).reset_index(drop=True)
+        Y[escenario] = bloque["attack_active"].reset_index(drop=True)
+    return X_inv, Y
+
+
+def entrenar_no_supervisado(salida: str = "modelos") -> dict:
+    """Entrena y guarda el Birch no supervisado sobre invariantes físicos.
+
+    Usa el mismo protocolo que ``loso``: entrena con todos los escenarios
+    salvo ``ESCENARIO_TEST`` y calibra el umbral con el último 20 % benigno de
+    cada escenario de entrenamiento.
+    """
+    X_inv, Y = _invariantes_por_escenario()
+    X_fit, X_val = entrenar_fold(X_inv, Y, ESCENARIO_TEST)
+    detector = Detector("birch").fit(X_fit, X_val)
+    protos = prototipos(detector.modelo_, detector.Z_)
+
+    carpeta = _raiz() / salida
+    carpeta.mkdir(exist_ok=True)
+    joblib.dump({
+        "columnas_invariantes": list(X_fit.columns),
+        "pipeline": detector.pipeline_,
+        "birch_model": detector.modelo_,
+        "birch_prototipos": protos,
+        "birch_umbral": float(detector.umbral_),
+        "escenario_test": ESCENARIO_TEST,
+    }, carpeta / "birch_invariantes.joblib")
+
+    print("escenarios de entrenamiento:",
+          sorted(k for k in X_inv if k != ESCENARIO_TEST))
+    print("X_fit:", X_fit.shape, "| X_val:", X_val.shape)
+    print("prototipos Birch:", len(protos))
+    print("umbral Birch (p95 benigno):", round(float(detector.umbral_), 4))
+    print("guardado en:", carpeta)
+    return {"detector": detector, "prototipos": protos}
+
+
+def exportar_no_supervisado(salida: str = "deploy_nosupervisado.pkl",
+                            carpeta: str = "modelos") -> dict:
+    """Empaqueta Birch + invariantes en un único ``.pkl`` portable."""
+    carpeta = _raiz() / carpeta
+    modelo = joblib.load(carpeta / "birch_invariantes.joblib")
+
+    paquete = {
+        "kind": "unsupervised",
+        "model_name": "birch_invariantes",
+        "columnas_invariantes": modelo["columnas_invariantes"],
+        "pipeline": modelo["pipeline"],
+        "birch_model": modelo["birch_model"],
+        "birch_prototipos": modelo["birch_prototipos"],
+        "birch_umbral": modelo["birch_umbral"],
+        "escenario_test": modelo.get("escenario_test"),
+    }
+    ruta = _raiz() / salida
+    with open(ruta, "wb") as f:
+        pickle.dump(paquete, f)
+    print("paquete portable:", ruta)
+    return paquete
+
+
+def predecir_no_supervisado(csv_path, carpeta: str = "modelos") -> pd.DataFrame:
+    """Score no supervisado sobre un CSV crudo con el modelo de ``entrenar_no_supervisado``.
+
+    Devuelve un DataFrame con una fila por segundo: la distancia al prototipo
+    benigno más cercano y la marca binaria según el umbral calibrado.
+    """
+    carpeta = _raiz() / carpeta
+    modelo = joblib.load(carpeta / "birch_invariantes.joblib")
+
+    df = pd.read_csv(csv_path)
+    X_inv = invariantes_fisicas(df)[modelo["columnas_invariantes"]]
+    Z = modelo["pipeline"].transform(X_inv)
+    _, score = pairwise_distances_argmin_min(Z, modelo["birch_prototipos"])
+
+    return pd.DataFrame({
+        "score_birch": score,
+        "flag_birch": (score > modelo["birch_umbral"]).astype(int),
     })
