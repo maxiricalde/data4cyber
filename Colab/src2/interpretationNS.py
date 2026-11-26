@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (adjusted_rand_score, davies_bouldin_score,
+from sklearn.metrics import (adjusted_rand_score, calinski_harabasz_score,
+                             davies_bouldin_score, normalized_mutual_info_score,
                              silhouette_score)
 
 
@@ -76,10 +77,12 @@ def tabla_clusters_escenario(etiquetas, grupos, nombre_grupo="escenario"):
 
 def resumen_clustering(Z, etiquetas, y, grupos, nombre_y="y",
                        nombre_grupo="grupo", random_state=42):
-    """Métricas de un clustering: tamaño, silueta, Davies-Bouldin y dos ARI.
+    """Métricas de un clustering: internas, externas y tamaño.
 
-    El ARI contra ``y`` y ``grupos`` es un control: si es alto, el clustering
-    sigue esas etiquetas (ataque, escenario) en vez de describir estructura.
+    Internas: silueta, Calinski-Harabasz y Davies-Bouldin. Externas: ARI y NMI
+    contra ``y`` y ``grupos``. Las externas son un control: si son altas, el
+    clustering sigue esas etiquetas (ataque, escenario) en vez de describir
+    estructura.
     """
     etiquetas = np.asarray(etiquetas)
     varios = len(np.unique(etiquetas)) > 1
@@ -88,7 +91,10 @@ def resumen_clustering(Z, etiquetas, y, grupos, nombre_y="y",
         "peso_min": float(pd.Series(etiquetas).value_counts(normalize=True).min()),
         "silueta": (silhouette_score(Z, etiquetas, sample_size=min(3000, len(Z)),
                                      random_state=random_state) if varios else np.nan),
+        "calinski_harabasz": calinski_harabasz_score(Z, etiquetas) if varios else np.nan,
         "davies_bouldin": davies_bouldin_score(Z, etiquetas) if varios else np.nan,
         f"ARI {nombre_y}": adjusted_rand_score(y, etiquetas),
         f"ARI {nombre_grupo}": adjusted_rand_score(grupos, etiquetas),
+        f"NMI {nombre_y}": normalized_mutual_info_score(y, etiquetas),
+        f"NMI {nombre_grupo}": normalized_mutual_info_score(grupos, etiquetas),
     }
