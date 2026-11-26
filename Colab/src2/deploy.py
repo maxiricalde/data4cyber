@@ -1,17 +1,14 @@
-"""Despliegue: entrena y guarda los modelos finales y predice sobre CSV crudo.
+"""Despliegue supervisado: entrena ``GroupedPCA + XGBoost`` y exporta el ``.pkl``.
 
-Supervisado: ``GroupedPCA + XGBoost`` con los mejores hiperparámetros del grid
-local, entrenado sobre todos los escenarios salvo ``S1-alt``, que queda
-reservado para probar el modelo.
-
-No supervisado: ``Detector("birch")`` (distancia al prototipo benigno más
-cercano + umbral p95), entrenado solo con las filas benignas de esos escenarios.
+Entrena con los mejores hiperparámetros del grid local sobre todos los
+escenarios salvo ``S1-alt``, que queda reservado para probar el modelo.
 
 Uso::
 
-    from src2.deploy import entrenar, predecir
+    from src2.deploy import entrenar_xgboost, exportar_portable, predecir
 
-    entrenar()
+    entrenar_xgboost()
+    exportar_portable()
     pred = predecir("datasets/datasetS1alt.csv")
 """
 
@@ -31,7 +28,6 @@ from .data import eliminar_columnas, imputar_media
 from .features import rango_movil, rango_por_escenario
 from .group import GroupedPCA
 from .train import PARAMS_XGB, SEED
-from .unsupervised import Detector
 
 BEST_XGB = {
     "learning_rate": 0.01,
@@ -39,6 +35,7 @@ BEST_XGB = {
     "n_estimators": 50,
     "subsample": 0.5,
 }
+UMBRAL_XGB = 0.5
 ESCENARIO_TEST = "S1-alt"
 ARCHIVOS = {
     "S0": "datasetS0.csv",
@@ -76,12 +73,12 @@ def _pipeline_xgb() -> Pipeline:
     ])
 
 
-def entrenar(salida: str = "modelos") -> dict:
-    """Entrena y guarda el XGB supervisado y el detector Birch.
+def entrenar_xgboost(salida: str = "modelos") -> dict:
+    """Entrena y guarda el XGB supervisado.
 
     Entrena con todos los escenarios salvo ``ESCENARIO_TEST``. Guarda en
-    ``salida/``: ``xgb_blockpca.joblib``, ``birch.joblib`` y ``preproceso.joblib``
-    (columnas y medias de imputación).
+    ``salida/``: ``xgb_blockpca.joblib`` y ``preproceso.joblib`` (columnas y
+    medias de imputación).
     """
     df = _cargar()
     df = eliminar_columnas(df)
@@ -94,12 +91,10 @@ def entrenar(salida: str = "modelos") -> dict:
     y = train["attack_active"].to_numpy()
 
     xgb = _pipeline_xgb().fit(X_rango, y)
-    detector = Detector("birch").fit(X_rango[y == 0])
 
     carpeta = _raiz() / salida
     carpeta.mkdir(exist_ok=True)
     joblib.dump(xgb, carpeta / "xgb_blockpca.joblib")
-    joblib.dump(detector, carpeta / "birch.joblib")
     joblib.dump(
         {"columnas": list(X_rango.columns), "medias": medias.to_dict()},
         carpeta / "preproceso.joblib",
@@ -107,34 +102,31 @@ def entrenar(salida: str = "modelos") -> dict:
 
     print("escenarios de entrenamiento:", sorted(train["escenario"].unique()))
     print("X_rango:", X_rango.shape, "| positivos:", int(y.sum()))
-    print("umbral Birch (p95 benigno):", round(float(detector.umbral_), 4))
     print("guardado en:", carpeta)
-    return {"xgb": xgb, "birch": detector}
+    return {"xgb": xgb}
 
 
 def exportar_portable(salida: str = "modelo_deploy.pkl",
                       carpeta: str = "modelos") -> dict:
-    """Empaqueta todo en un único ``.pkl`` con solo objetos de sklearn/numpy.
+    """Empaqueta el XGB supervisado en un único ``.pkl`` portable.
 
-    No guarda las clases de ``src2`` (``GroupedPCA``, ``Detector``): guarda los
-    bloques ya ajustados y los modelos crudos, para que ``deploy_portable.py``
-    pueda predecir sin importar el proyecto.
+    No guarda las clases de ``src2`` (``GroupedPCA``): guarda los bloques ya
+    ajustados y el modelo crudo, para que ``deploy_supervisado.py`` pueda
+    predecir sin importar el proyecto.
     """
     carpeta = _raiz() / carpeta
     xgb = joblib.load(carpeta / "xgb_blockpca.joblib")
-    detector = joblib.load(carpeta / "birch.joblib")
     preproceso = joblib.load(carpeta / "preproceso.joblib")
 
     paquete = {
+        "kind": "supervised",
+        "model_name": "xgb_blockpca",
         "columnas": preproceso["columnas"],
         "medias": preproceso["medias"],
         "ventana": 120,
         "xgb_model": xgb.named_steps["modelo"],
         "pca_blocks": xgb.named_steps["block"].blocks_,
-        "birch_pipe": detector.pipeline_,
-        "birch_model": detector.modelo_,
-        "birch_Z": detector.Z_,
-        "birch_umbral": float(detector.umbral_),
+        "xgb_umbral": UMBRAL_XGB,
     }
     ruta = _raiz() / salida
     with open(ruta, "wb") as f:
@@ -153,23 +145,21 @@ def _preprocesar(df: pd.DataFrame, preproceso: dict) -> pd.DataFrame:
     return rango_movil(df, 120)[preproceso["columnas"]]
 
 
-def predecir(csv_path, carpeta: str = "modelos") -> pd.DataFrame:
-    """Score sobre un CSV crudo con los modelos guardados por ``entrenar``.
+def predecir(csv_path, carpeta: str = "modelos",
+             umbral: float = UMBRAL_XGB) -> pd.DataFrame:
+    """Score supervisado sobre un CSV crudo con los modelos de ``entrenar_xgboost``.
 
     Devuelve un DataFrame con una fila por segundo: la probabilidad de ataque
-    del XGB y el score/flag del detector Birch.
+    del XGB y la marca binaria según ``umbral``.
     """
     carpeta = _raiz() / carpeta
     xgb = joblib.load(carpeta / "xgb_blockpca.joblib")
-    detector = joblib.load(carpeta / "birch.joblib")
     preproceso = joblib.load(carpeta / "preproceso.joblib")
 
     X_rango = _preprocesar(pd.read_csv(csv_path), preproceso)
 
     proba = xgb.predict_proba(X_rango)[:, 1]
-    score = detector.score(X_rango)
     return pd.DataFrame({
         "prob_ataque_xgb": proba,
-        "score_birch": score,
-        "flag_birch": (score > detector.umbral_).astype(int),
+        "ataque_xgb": (proba >= umbral).astype(int),
     })
