@@ -27,8 +27,12 @@ import pickle
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import pairwise_distances_argmin_min
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import RobustScaler
 from xgboost import XGBClassifier
 
 from .data import eliminar_columnas, imputar_media
@@ -283,3 +287,111 @@ def predecir_no_supervisado(csv_path, carpeta: str = "modelos") -> pd.DataFrame:
         "score_birch": score,
         "flag_birch": (score > modelo["birch_umbral"]).astype(int),
     })
+
+
+# ------------------------------------------------------------- regímenes ----
+
+
+def _etiquetas_regimen(X: pd.DataFrame, etiquetas: np.ndarray) -> dict[int, str]:
+    """Traduce cada cluster de KMeans a una etiqueta física legible.
+
+    El eje del clustering son las invariantes de potencia aparente: un cluster
+    queda cerca de cero (operación consistente) y los otros dos son los signos
+    opuestos de la inconsistencia (cargas vs PV). Las etiquetas se derivan del
+    perfil medio de cada cluster, no del número que asigna KMeans.
+    """
+    perfil = X.assign(_cluster=etiquetas).groupby("_cluster").mean()
+    cargas = (perfil["Load-A-AC-Meter__serror"]
+              + perfil["Load-B-AC-Meter__serror"]) / 2
+    pv = perfil["PV-Inverter-AC-Meter__serror"]
+
+    magnitud = pd.concat([cargas.abs(), pv.abs()], axis=1).max(axis=1)
+    neutral = int(magnitud.idxmin())
+    resto = [int(c) for c in perfil.index if int(c) != neutral]
+    cargas_id = max(resto, key=lambda c: cargas[c] - pv[c])
+    pv_id = next(c for c in resto if c != cargas_id)
+
+    return {
+        neutral: "sin_inconsistencia_S",
+        cargas_id: "inconsistencia_S_cargas",
+        pv_id: "inconsistencia_S_PV",
+    }
+
+
+def entrenar_regimenes(salida: str = "modelos", k: int = 3) -> dict:
+    """Entrena el KMeans de regímenes sobre invariantes de todos los escenarios.
+
+    Reproduce el clustering que ganó en la etapa no supervisada:
+    ``SimpleImputer(median) + RobustScaler + PCA(0.95) + KMeans(k=3)``.
+    No es un detector: agrupa por régimen físico y devuelve una etiqueta.
+    """
+    if k != 3:
+        raise ValueError("el etiquetador de regímenes está definido para k=3")
+
+    X_inv, _ = _invariantes_por_escenario()
+    X_all = pd.concat([X_inv[e] for e in X_inv], ignore_index=True)
+
+    pipeline = make_pipeline(
+        SimpleImputer(strategy="median"),
+        RobustScaler(),
+        PCA(n_components=0.95, random_state=SEED),
+    )
+    Z = pipeline.fit_transform(X_all)
+    kmeans = KMeans(n_clusters=k, n_init=10, random_state=SEED).fit(Z)
+    etiquetas = _etiquetas_regimen(X_all, kmeans.labels_)
+
+    carpeta = _raiz() / salida
+    carpeta.mkdir(exist_ok=True)
+    joblib.dump({
+        "columnas_invariantes": list(X_all.columns),
+        "pipeline": pipeline,
+        "kmeans_model": kmeans,
+        "kmeans_centroides": kmeans.cluster_centers_,
+        "k": k,
+        "etiquetas": etiquetas,
+        "escenarios": list(X_inv),
+    }, carpeta / "regimenes_kmeans.joblib")
+
+    print("escenarios:", list(X_inv))
+    print("X_inv:", X_all.shape, "| componentes PCA:", Z.shape[1])
+    print("etiquetas:", etiquetas)
+    print("guardado en:", carpeta)
+    return {"pipeline": pipeline, "kmeans": kmeans, "etiquetas": etiquetas}
+
+
+def exportar_regimenes(salida: str = "deploy_regimenes.pkl",
+                       carpeta: str = "modelos") -> dict:
+    """Empaqueta el KMeans de regímenes en un único ``.pkl`` portable."""
+    carpeta = _raiz() / carpeta
+    modelo = joblib.load(carpeta / "regimenes_kmeans.joblib")
+
+    paquete = {
+        "kind": "regimenes",
+        "model_name": "kmeans_invariantes",
+        "columnas_invariantes": modelo["columnas_invariantes"],
+        "pipeline": modelo["pipeline"],
+        "kmeans_centroides": modelo["kmeans_centroides"],
+        "k": modelo["k"],
+        "etiquetas": modelo["etiquetas"],
+    }
+    ruta = _raiz() / salida
+    with open(ruta, "wb") as f:
+        pickle.dump(paquete, f)
+    print("paquete portable:", ruta)
+    return paquete
+
+
+def predecir_regimenes(csv_path, carpeta: str = "modelos") -> pd.DataFrame:
+    """Etiqueta cada fila de un CSV crudo con su régimen de operación.
+
+    Devuelve una columna ``regimen`` (texto), no un score ni un flag.
+    """
+    carpeta = _raiz() / carpeta
+    modelo = joblib.load(carpeta / "regimenes_kmeans.joblib")
+
+    df = pd.read_csv(csv_path)
+    X_inv = invariantes_fisicas(df)[modelo["columnas_invariantes"]]
+    Z = modelo["pipeline"].transform(X_inv)
+    indice, _ = pairwise_distances_argmin_min(Z, modelo["kmeans_centroides"])
+    etiquetas = modelo["etiquetas"]
+    return pd.DataFrame({"regimen": [etiquetas[int(i)] for i in indice]})
